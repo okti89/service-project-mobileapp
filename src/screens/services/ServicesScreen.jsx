@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
+import {
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import dayjs from 'dayjs';
 import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
@@ -14,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import serviceService from '@/services/serviceService';
 import technicianService from '@/services/technicianService';
+import { serviceBlue } from '@/theme/color';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -48,7 +58,7 @@ const isServiceAssignmentLocked = (service) => {
 const ServicesScreen = () => {
     const navigation = useNavigation();
     const { colors, isDark } = useTheme();
-    const { isAdmin } = useAuth();
+    const { isAdmin, mobilePermissions } = useAuth();
 
     const [services, setServices] = useState([]);
     const [technicians, setTechnicians] = useState([]);
@@ -67,10 +77,16 @@ const ServicesScreen = () => {
     const technicianPickerSheetRef = useRef(null);
     const actionsSheetRef = useRef(null);
     const stateRef = useRef({ activeMonth, isAdmin });
+    const hasHandledInitialFocusRef = useRef(false);
 
     useEffect(() => {
         stateRef.current = { activeMonth, isAdmin };
     }, [activeMonth, isAdmin]);
+
+    const canCreateService = useMemo(
+        () => isAdmin || Boolean(mobilePermissions?.can_manage_services),
+        [isAdmin, mobilePermissions]
+    );
 
     const fetchServices = useCallback(async ({ isRefresh = false } = {}) => {
         const currentMonth = stateRef.current.activeMonth;
@@ -125,6 +141,17 @@ const ServicesScreen = () => {
     useEffect(() => {
         fetchServices();
     }, [fetchServices, activeMonth]);
+
+    useFocusEffect(
+        useCallback(() => {
+            if (!hasHandledInitialFocusRef.current) {
+                hasHandledInitialFocusRef.current = true;
+                return undefined;
+            }
+            fetchServices();
+            return undefined;
+        }, [fetchServices])
+    );
 
     useEffect(() => {
         fetchTechnicians();
@@ -196,6 +223,11 @@ const ServicesScreen = () => {
         if (!isAdmin) return;
         technicianFilterSheetRef.current?.present();
     }, [isAdmin]);
+
+    const handleOpenCreateService = useCallback(() => {
+        if (!canCreateService) return;
+        navigation.navigate('NewService');
+    }, [canCreateService, navigation]);
 
     const openServiceDetail = useCallback((service) => {
         if (!service?.id) return;
@@ -273,9 +305,24 @@ const ServicesScreen = () => {
         }
     }, [openServiceDetail]);
 
+    const headerAction = canCreateService ? (
+        <Pressable
+            onPress={handleOpenCreateService}
+            style={({ pressed }) => [styles.addButton, { opacity: pressed ? 0.92 : 1 }]}
+        >
+            <MaterialCommunityIcons name="plus" size={16} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Servis Ekle</Text>
+        </Pressable>
+    ) : null;
+
     return (
         <WrapperContainer withTabBar>
-            <Header title="Servisler" subtitle="Gün ve teknisyene göre filtrele" borderBottom />
+            <Header
+                title="Servisler"
+                subtitle="Gün ve teknisyene göre filtrele"
+                borderBottom
+                right={headerAction}
+            />
 
             <View style={styles.topBlock}>
                 <ServiceDateFilter
@@ -385,6 +432,21 @@ const ServicesScreen = () => {
 };
 
 const styles = StyleSheet.create({
+    addButton: {
+        minHeight: 40,
+        paddingHorizontal: spacing.m,
+        borderRadius: 12,
+        backgroundColor: serviceBlue,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    addButtonText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '800',
+    },
     topBlock: {
         paddingTop: spacing.s,
     },
