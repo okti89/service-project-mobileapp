@@ -55,9 +55,11 @@ const HomeProfileCard = ({ userInfo, shiftSummary, onPressShift }) => {
 
     const accentColor = isAdmin ? colors.error : colors.primary;
     const greeting = getGreeting();
-    const shouldStopShift = Boolean(shiftSummary?.isActiveToday || shiftSummary?.hasOvernightOpenShift);
+    const shouldStopShift = Boolean(shiftSummary?.shouldStopShift);
     const shiftButtonLabel = shouldStopShift ? 'Mesaiyi Bitir' : 'Mesai Başlat';
     const shiftButtonColor = shouldStopShift ? colors.error : colors.success;
+    const progressValue = Math.max(0, Math.min(100, Number(shiftSummary?.completedPercentage || 0)));
+    const progressWidth = `${progressValue}%`;
 
     return (
         <View style={styles.wrapper}>
@@ -145,13 +147,40 @@ const HomeProfileCard = ({ userInfo, shiftSummary, onPressShift }) => {
                 {shiftSummary?.visible ? (
                     <View style={[styles.shiftRow, { borderTopColor: colors.border }]}>
                         <View style={styles.shiftInfo}>
-                            <Text style={[styles.shiftStatus, { color: shiftSummary.statusColor || colors.primary }]}>
-                                {shiftSummary.statusLabel}
-                            </Text>
+                            <View style={styles.shiftTopLine}>
+                                <Text style={[styles.shiftStatus, { color: shiftSummary.statusColor || colors.primary }]}>
+                                    {shiftSummary.statusLabel}
+                                </Text>
+                                <Text style={[styles.shiftPercent, { color: shiftSummary.statusColor || colors.primary }]}>
+                                    {shiftSummary.progressShortLabel || shiftSummary.progressLabel}
+                                </Text>
+                            </View>
+
                             <Text style={[styles.shiftMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-                                {shiftSummary.counterLabel}
-                                {shiftSummary.metaLabel ? ` • ${shiftSummary.metaLabel}` : ''}
+                                {shiftSummary.todayScheduleLabel || 'Tanımlı değil'}
+                                {shiftSummary.targetDurationLabel ? ` • Hedef ${shiftSummary.targetDurationLabel}` : ''}
                             </Text>
+
+                            <View style={[styles.progressTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB' }]}>
+                                <View
+                                    style={[
+                                        styles.progressFill,
+                                        {
+                                            width: progressWidth,
+                                            backgroundColor: shiftSummary.statusColor || colors.primary,
+                                        },
+                                    ]}
+                                />
+                            </View>
+
+                            <View style={styles.progressFooter}>
+                                <Text style={[styles.progressHint, { color: colors.textTertiary }]}>
+                                    Çalışılan {shiftSummary.workedDurationLabel || '00:00:00'}
+                                </Text>
+                                <Text style={[styles.progressHint, { color: colors.textTertiary }]}>
+                                    {shiftSummary.remainingLabel}: {shiftSummary.remainingDurationLabel || '00:00:00'}
+                                </Text>
+                            </View>
                         </View>
 
                         <Pressable
@@ -294,16 +323,48 @@ const styles = StyleSheet.create({
         flex: 1,
         minWidth: 0,
     },
+    shiftTopLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.s,
+    },
     shiftStatus: {
         fontSize: 14,
         fontWeight: '800',
         letterSpacing: -0.2,
+        flexShrink: 1,
+    },
+    shiftPercent: {
+        fontSize: 11,
+        fontWeight: '800',
     },
     shiftMeta: {
         fontSize: 11,
         fontWeight: '600',
-        marginTop: 3,
+        marginTop: 4,
         lineHeight: 16,
+    },
+    progressTrack: {
+        marginTop: 8,
+        height: 7,
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 999,
+    },
+    progressFooter: {
+        marginTop: 6,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: spacing.s,
+    },
+    progressHint: {
+        fontSize: 10,
+        fontWeight: '600',
+        flex: 1,
     },
     shiftButton: {
         minHeight: 38,
