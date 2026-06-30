@@ -70,12 +70,6 @@ const HomeScreen = () => {
         setRefreshing(false);
     }, [fetchShiftSummary, refreshConfig]);
 
-    const handleServicePress = useCallback((service) => {
-        if (service) {
-            console.log('Service pressed:', service?.id || service?.receipt_number);
-        }
-    }, []);
-
     const shiftSummary = useMemo(
         () => (canManageShift ? buildShiftState({ shifts, config, now }) : { visible: false, warnings: [], recentShifts: [] }),
         [canManageShift, config, now, shifts]
@@ -140,7 +134,6 @@ const HomeScreen = () => {
                     isAdmin={isAdmin}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
-                    onServicePress={handleServicePress}
                 />
             </ScrollView>
 
@@ -163,4 +156,3 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
-
