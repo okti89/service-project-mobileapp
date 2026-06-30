@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
 import CustomButton from '@/components/CustomButton';
+import CustomInput from '@/components/CustomInput';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import customerService from '@/services/customerService';
@@ -400,32 +401,34 @@ export default function NewServiceScreen({ navigation }) {
     const timeLabel = useMemo(() => dayjs(form.scheduledDate).format('HH:mm'), [form.scheduledDate]);
 
     const renderInput = (key, label, options = {}) => (
-        <View style={styles.fieldWrap}>
-            <Text style={[styles.fieldLabel, { color: errors[key] ? serviceRed : colors.textSecondary }]}>
-                {label}
-                {options.required ? <Text style={{ color: serviceRed }}> *</Text> : null}
-            </Text>
-            <TextInput
-                value={form[key]}
-                onChangeText={(text) => updateField(key, options.phone ? formatPhoneInput(text) : text)}
-                placeholder={options.placeholder || label}
-                placeholderTextColor={colors.textTertiary}
-                keyboardType={options.keyboardType}
-                multiline={options.multiline}
-                numberOfLines={options.multiline ? 4 : 1}
-                style={[
-                    styles.textInput,
-                    options.multiline && styles.textArea,
-                    {
-                        backgroundColor: colors.surface,
-                        borderColor: errors[key] ? serviceRed : colors.border,
-                        color: colors.text,
-                        textAlignVertical: options.multiline ? 'top' : 'center',
-                    },
-                ]}
-            />
-            {errors[key] ? <Text style={styles.errorText}>{errors[key]}</Text> : null}
-        </View>
+        <CustomInput
+            label={`${label}${options.required ? ' *' : ''}`}
+            value={form[key]}
+            onChangeText={(text) => updateField(key, text)}
+            error={errors[key]}
+            isPhone={options.phone}
+            keyboardType={options.keyboardType}
+            multiline={options.multiline}
+            numberOfLines={options.multiline ? 4 : 1}
+            placeholder={options.placeholder || label}
+            inputContainerStyle={[
+                styles.textInput,
+                options.multiline && styles.textArea,
+                {
+                    backgroundColor: colors.surface,
+                    height: options.multiline ? undefined : 55,
+                    alignItems: options.multiline ? 'flex-start' : 'center',
+                    paddingTop: options.multiline ? 12 : undefined,
+                },
+            ]}
+            style={[
+                styles.customInputText,
+                {
+                    color: colors.text,
+                    textAlignVertical: options.multiline ? 'top' : 'center',
+                },
+            ]}
+        />
     );
     return (
         <WrapperContainer keyboardAvoiding>
@@ -545,7 +548,8 @@ const styles = StyleSheet.create({
     createRow: { borderWidth: 1, borderRadius: 14, padding: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginTop: -4, marginBottom: spacing.m },
     createInput: { flex: 1, minHeight: 40, fontSize: 14, fontWeight: '500', paddingHorizontal: spacing.s },
     createButton: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    textInput: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, paddingVertical: 12, fontSize: 14, fontWeight: '500' },
+    textInput: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, paddingVertical: 12 },
+    customInputText: { fontSize: 14, fontWeight: '500' },
     textArea: { minHeight: 92 },
     errorText: { color: serviceRed, fontSize: 11, fontWeight: '600', marginTop: 5 },
     customerPicker: { minHeight: 58, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
