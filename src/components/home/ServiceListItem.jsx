@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
     Image,
     Platform,
@@ -33,11 +33,20 @@ const resolveTechnicianAvatar = (service) => resolveMediaUrl(
     || service?.user?.avatar_url
 );
 
+const formatCurrency = (value) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    return new Intl.NumberFormat('tr-TR', {
+        style: 'currency',
+        currency: 'TRY',
+        maximumFractionDigits: 2,
+    }).format(amount);
+};
+
 export default function ServiceListItem({
     service,
     onPress,
     onPressActions,
-    onPressAddress,
     onPressTechnician,
     onPressStatus,
     isTechnicianEditable = false,
@@ -48,14 +57,14 @@ export default function ServiceListItem({
     const statusColor = useMemo(() => service?.status_color || colors.primary, [service?.status_color, colors.primary]);
     const statusName = useMemo(() => service?.status_name || service?.service_status || 'Bilinmiyor', [service?.status_name, service?.service_status]);
     const scheduled = useMemo(() => (service?.scheduled_date ? dayjs(service.scheduled_date) : null), [service?.scheduled_date]);
+    const technicianName = service?.technician_full_name || service?.technician_name || 'Atanmamış';
+    const technicianAvatar = useMemo(() => resolveTechnicianAvatar(service), [service]);
+    const technicianInitials = useMemo(() => getInitials(technicianName), [technicianName]);
+    const totalPriceLabel = useMemo(() => formatCurrency(service?.total_price), [service?.total_price]);
 
     const timeLabel = scheduled ? scheduled.format('HH:mm') : '--:--';
     const dateLabel = scheduled ? scheduled.format('DD MMM') : '—';
     const dayLabel = scheduled ? scheduled.format('ddd') : '';
-
-    const technicianName = service?.technician_full_name || service?.technician_name || 'Atanmamış';
-    const technicianAvatar = useMemo(() => resolveTechnicianAvatar(service), [service]);
-    const technicianInitials = useMemo(() => getInitials(technicianName), [technicianName]);
 
     const handlePress = useCallback(() => onPress?.(service), [onPress, service]);
     const handleActions = useCallback(() => onPressActions?.(service), [onPressActions, service]);
@@ -69,11 +78,11 @@ export default function ServiceListItem({
     }, [isStatusEditable, onPressStatus, service]);
 
     const secondaryText = isDark ? '#9BA2AF' : '#6B7280';
-    const cardBg = isDark ? `${statusColor}14` : '#FFFFFF';
-    const cardBorder = `${statusColor}${isDark ? '66' : '42'}`;
-    const actionBg = isDark ? 'rgba(148,163,184,0.14)' : '#E2E8F0';
-    const actionBorder = isDark ? 'rgba(148,163,184,0.28)' : '#CBD5E1';
-    const actionTextColor = isDark ? '#E2E8F0' : '#334155';
+    const cardBg = isDark ? colors.surface : '#FFFFFF';
+    const cardBorder = `${statusColor}${isDark ? '38' : '24'}`;
+    const actionBg = isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC';
+    const actionBorder = isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
+    const actionTextColor = isDark ? '#E5E7EB' : '#475569';
 
     return (
         <Pressable
@@ -100,16 +109,19 @@ export default function ServiceListItem({
         >
             <View style={styles.inner}>
                 <View style={styles.topRow}>
-                    <View style={[styles.timeBlock, { backgroundColor: `${statusColor}14`, borderColor: `${statusColor}25` }]}>
+                    <View style={[styles.timeBlock, { backgroundColor: `${statusColor}10`, borderColor: `${statusColor}20` }]}>
                         <Text style={[styles.time, { color: statusColor }]}>{timeLabel}</Text>
                         <Text style={[styles.dateSmall, { color: statusColor, opacity: 0.8 }]}>{dateLabel}</Text>
                         <Text style={[styles.daySmall, { color: secondaryText }]}>{dayLabel}</Text>
                     </View>
 
                     <View style={styles.customerBlock}>
-                        <Text style={[styles.customerName, { color: colors.text }]} numberOfLines={1}>
-                            {service?.customer_full_name || 'Müşteri'}
-                        </Text>
+                        <View style={styles.customerTitleRow}>
+                            <Text style={[styles.customerName, { color: colors.text }]} numberOfLines={1}>
+                                {service?.customer_full_name || 'Müşteri'}
+                            </Text>
+                            <MaterialCommunityIcons name="chevron-right" size={18} color={secondaryText} />
+                        </View>
 
                         {service?.customer_address ? (
                             <View style={styles.addressRow}>
@@ -120,9 +132,9 @@ export default function ServiceListItem({
                             </View>
                         ) : null}
 
-                        {service?.receipt_number ? (
-                            <Text style={[styles.receiptNo, { color: secondaryText }]} numberOfLines={1}>
-                                #{service.receipt_number}
+                        {totalPriceLabel ? (
+                            <Text style={[styles.priceText, { color: statusColor }]} numberOfLines={1}>
+                                İşlem Fiyatı: {totalPriceLabel}
                             </Text>
                         ) : null}
                     </View>
@@ -134,8 +146,8 @@ export default function ServiceListItem({
                         style={({ pressed }) => [
                             styles.statusPill,
                             {
-                                backgroundColor: `${statusColor}18`,
-                                borderColor: `${statusColor}45`,
+                                backgroundColor: `${statusColor}10`,
+                                borderColor: `${statusColor}24`,
                                 opacity: pressed && isStatusEditable ? 0.82 : 1,
                             },
                         ]}
@@ -159,8 +171,8 @@ export default function ServiceListItem({
                         style={({ pressed }) => [
                             styles.techRow,
                             {
-                                backgroundColor: pressed && isTechnicianEditable ? `${statusColor}10` : 'transparent',
-                                borderColor: `${statusColor}22`,
+                                backgroundColor: pressed && isTechnicianEditable ? `${statusColor}08` : 'transparent',
+                                borderColor: `${statusColor}18`,
                             },
                         ]}
                     >
@@ -188,8 +200,8 @@ export default function ServiceListItem({
                         style={({ pressed }) => [
                             styles.actionsBtn,
                             {
-                                backgroundColor: pressed ? `${statusColor}18` : actionBg,
-                                borderColor: pressed ? `${statusColor}35` : actionBorder,
+                                backgroundColor: pressed ? `${statusColor}12` : actionBg,
+                                borderColor: pressed ? `${statusColor}24` : actionBorder,
                             },
                         ]}
                     >
@@ -204,7 +216,7 @@ export default function ServiceListItem({
 
 const styles = StyleSheet.create({
     card: {
-        borderWidth: 1.5,
+        borderWidth: 1,
         marginBottom: spacing.m,
         overflow: 'hidden',
         width: '100%',
@@ -212,8 +224,8 @@ const styles = StyleSheet.create({
     },
     inner: {
         flex: 1,
-        paddingHorizontal: spacing.m + 2,
-        paddingVertical: spacing.m + 2,
+        paddingHorizontal: spacing.m,
+        paddingVertical: spacing.m,
         gap: spacing.m,
     },
     topRow: {
@@ -222,10 +234,10 @@ const styles = StyleSheet.create({
         gap: spacing.m,
     },
     timeBlock: {
-        borderRadius: 14,
+        borderRadius: 10,
         borderWidth: 1,
-        paddingVertical: spacing.s + 1,
-        paddingHorizontal: spacing.s + 2,
+        paddingVertical: spacing.s,
+        paddingHorizontal: spacing.s + 1,
         alignItems: 'center',
         minWidth: 56,
     },
@@ -250,9 +262,16 @@ const styles = StyleSheet.create({
     customerBlock: {
         flex: 1,
         minWidth: 0,
-        gap: 3,
+        gap: 4,
+    },
+    customerTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.s,
     },
     customerName: {
+        flex: 1,
         fontSize: 15,
         fontWeight: '700',
         letterSpacing: -0.3,
@@ -267,20 +286,20 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         flexShrink: 1,
     },
-    receiptNo: {
-        fontSize: 10,
-        fontWeight: '600',
-        letterSpacing: 0.2,
+    priceText: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: -0.1,
     },
     statusPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 8,
-        paddingVertical: 6,
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 5,
         borderWidth: 1,
-        maxWidth: 148,
-        minWidth: 112,
+        maxWidth: 142,
+        minWidth: 104,
         alignSelf: 'flex-start',
     },
     statusDot: {
@@ -317,7 +336,7 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        borderWidth: 1.5,
+        borderWidth: 1,
     },
     techAvatarFallback: {
         alignItems: 'center',
@@ -351,8 +370,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+        paddingVertical: 7,
+        paddingHorizontal: 10,
         borderWidth: 1,
     },
     actionsBtnText: {

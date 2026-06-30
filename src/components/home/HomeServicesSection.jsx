@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
     forwardRef,
     useCallback,
     useEffect,
@@ -10,8 +10,6 @@
 import {
     ActivityIndicator,
     Alert,
-    Linking,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -38,7 +36,7 @@ const VIEW_MODES = [
     { key: 'all', label: 'Tüm Servisler' },
 ];
 
-const SERVICE_STATUS_OPTIONS = [
+const FALLBACK_SERVICE_STATUS_OPTIONS = [
     { key: 'new', label: 'Yeni', color: '#4F7CFF' },
     { key: 'assigned', label: 'Atandı', color: '#F59E0B' },
     { key: 'in_progress', label: 'Devam Ediyor', color: '#2563EB' },
@@ -67,6 +65,14 @@ const mergeUpdatedService = (currentService, updatedService) => {
     return merged?.technician == null ? clearTechnicianFields(merged) : merged;
 };
 
+const isServiceAssignmentLocked = (service) => {
+    const statusKey = String(service?.service_status || '').trim().toLowerCase();
+    const isCompleted = statusKey === 'completed';
+    const scheduled = service?.scheduled_date ? dayjs(service.scheduled_date) : null;
+    const isPastDate = scheduled ? scheduled.startOf('day').isBefore(dayjs().startOf('day')) : false;
+    return isCompleted || isPastDate;
+};
+
 const HomeServicesSection = forwardRef(
     ({ isAdmin = false, viewMode = 'mine', onViewModeChange, onServicePress }, ref) => {
         const { colors, isDark } = useTheme();
@@ -85,6 +91,7 @@ const HomeServicesSection = forwardRef(
         const [technicianTargetService, setTechnicianTargetService] = useState(null);
         const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
         const [statusTargetService, setStatusTargetService] = useState(null);
+        const [statusOptions, setStatusOptions] = useState(FALLBACK_SERVICE_STATUS_OPTIONS);
 
         const actionsSheetRef = useRef(null);
         const technicianSheetRef = useRef(null);
@@ -140,6 +147,26 @@ const HomeServicesSection = forwardRef(
             }
         }, []);
 
+        const fetchServiceStatuses = useCallback(async () => {
+            try {
+                const data = await serviceService.getServiceStatuses();
+                const normalized = Array.isArray(data)
+                    ? data
+                        .filter((item) => item?.code && item?.is_active !== false)
+                        .map((item) => ({
+                            key: String(item.code).trim().toLowerCase(),
+                            label: item.name || item.code,
+                            color: item.color || colors.primary,
+                        }))
+                    : [];
+
+                setStatusOptions(normalized.length > 0 ? normalized : FALLBACK_SERVICE_STATUS_OPTIONS);
+            } catch (err) {
+                console.warn('Service status list fetch error:', err?.response?.data || err?.message);
+                setStatusOptions(FALLBACK_SERVICE_STATUS_OPTIONS);
+            }
+        }, [colors.primary]);
+
         const fetchTechnicians = useCallback(async () => {
             try {
                 setTechniciansLoading(true);
@@ -165,6 +192,12 @@ const HomeServicesSection = forwardRef(
             fetchServices();
         }, [fetchServices, viewMode, activeMonth]);
 
+        useEffect(() => {
+            if (isAdmin) {
+                fetchServiceStatuses();
+            }
+        }, [fetchServiceStatuses, isAdmin]);
+
         const handleServicePress = useCallback(
             (service) => {
                 if (onServicePress) {
@@ -184,23 +217,8 @@ const HomeServicesSection = forwardRef(
             });
         }, []);
 
-        const handleServiceAddress = useCallback((service) => {
-            if (!service?.customer_address) return;
-
-            const encoded = encodeURIComponent(service.customer_address);
-            const url = Platform.select({
-                ios: `maps:0,0?q=${encoded}`,
-                android: `geo:0,0?q=${encoded}`,
-                default: `https://www.google.com/maps/search/?api=1&query=${encoded}`,
-            });
-
-            Linking.openURL(url).catch(() => {
-                Alert.alert('Hata', 'Harita uygulaması açılamadı.');
-            });
-        }, []);
-
         const handleTechnicianPress = useCallback(async (service) => {
-            if (!isAdmin || !service?.id) return;
+            if (!isAdmin || !service?.id || isServiceAssignmentLocked(service)) return;
 
             setTechnicianTargetService(service);
             technicianSheetRef.current?.present();
@@ -312,15 +330,13 @@ const HomeServicesSection = forwardRef(
                     return;
                 }
 
-                switch (actionKey) {
-                    case 'status':
-                        handleStatusPress(service);
-                        break;
-                    case 'pdf':
-                        console.log(`Sheet action ${actionKey}:`, service?.id);
-                        break;
-                    default:
-                        break;
+                if (actionKey === 'status') {
+                    handleStatusPress(service);
+                    return;
+                }
+
+                if (actionKey === 'reschedule') {
+                    openServiceDetail(service);
                 }
             },
             [handleStatusPress, openServiceDetail]
@@ -377,8 +393,8 @@ const HomeServicesSection = forwardRef(
                         style={[
                             styles.segmented,
                             {
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F4F9',
-                                borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.06)',
+                                backgroundColor: 'transparent',
+                                borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#D7DFEA',
                             },
                         ]}
                     >
@@ -393,8 +409,8 @@ const HomeServicesSection = forwardRef(
                                     style={[
                                         styles.segmentedItem,
                                         active && {
-                                            backgroundColor: colors.surface,
-                                            borderColor: `${colors.primary}25`,
+                                            backgroundColor: 'transparent',
+                                            borderColor: active ? colors.success : 'transparent',
                                         },
                                     ]}
                                 >
@@ -402,7 +418,7 @@ const HomeServicesSection = forwardRef(
                                         style={[
                                             styles.segmentedText,
                                             {
-                                                color: active ? colors.primary : colors.textSecondary,
+                                                color: active ? colors.text : colors.textSecondary,
                                                 fontWeight: active ? '700' : '600',
                                             },
                                         ]}
@@ -444,20 +460,12 @@ const HomeServicesSection = forwardRef(
                         </View>
                     ) : error ? (
                         <View style={styles.emptyState}>
-                            <MaterialCommunityIcons
-                                name="alert-circle-outline"
-                                size={28}
-                                color={colors.error}
-                            />
+                            <MaterialCommunityIcons name="alert-circle-outline" size={28} color={colors.error} />
                             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{error}</Text>
                         </View>
                     ) : filteredServices.length === 0 ? (
                         <View style={styles.emptyState}>
-                            <MaterialCommunityIcons
-                                name="calendar-blank-outline"
-                                size={28}
-                                color={colors.textTertiary}
-                            />
+                            <MaterialCommunityIcons name="calendar-blank-outline" size={28} color={colors.textTertiary} />
                             <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Bu tarihe ait servis kaydı yok.</Text>
                         </View>
                     ) : (
@@ -468,10 +476,9 @@ const HomeServicesSection = forwardRef(
                                 index={index}
                                 onPress={handleServicePress}
                                 onPressActions={handleServiceActions}
-                                onPressAddress={handleServiceAddress}
                                 onPressTechnician={handleTechnicianPress}
                                 onPressStatus={handleStatusPress}
-                                isTechnicianEditable={isAdmin}
+                                isTechnicianEditable={isAdmin && !isServiceAssignmentLocked(service)}
                                 isStatusEditable={isAdmin}
                             />
                         ))
@@ -495,7 +502,7 @@ const HomeServicesSection = forwardRef(
 
                 <StatusPickerSheet
                     ref={statusSheetRef}
-                    statuses={SERVICE_STATUS_OPTIONS}
+                    statuses={statusOptions}
                     loading={statusUpdateLoading}
                     selectedStatusKey={String(statusTargetService?.service_status || '').trim().toLowerCase() || null}
                     onSelect={handleStatusSelect}
@@ -513,19 +520,21 @@ const styles = StyleSheet.create({
     segmented: {
         flexDirection: 'row',
         marginHorizontal: spacing.gutter,
-        padding: 4,
-        borderRadius: 14,
-        borderWidth: 1,
-        marginBottom: spacing.l,
+        paddingHorizontal: spacing.gutter,
+        borderRadius: 0,
+        borderWidth: 0,
+        borderBottomWidth: 1,
+        marginBottom: spacing.m + 2,
     },
     segmentedItem: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: spacing.s + 2,
-        paddingHorizontal: spacing.m,
-        borderRadius: 10,
-        borderWidth: 1,
+        paddingHorizontal: spacing.s,
+        borderRadius: 0,
+        borderWidth: 0,
+        borderBottomWidth: 2,
         borderColor: 'transparent',
     },
     segmentedText: {

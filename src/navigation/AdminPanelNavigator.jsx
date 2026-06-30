@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AdminPanelScreen from '@/screens/admin/AdminPanelScreen';
 import AdminSectionScreen from '@/screens/admin/AdminSectionScreen';
@@ -17,8 +17,12 @@ const AdminPanelNavigator = () => {
             <Stack.Screen name="AdminTechnicianShifts" component={AdminSectionScreen} />
             <Stack.Screen name="AdminTechnicianLeaves" component={AdminSectionScreen} />
             <Stack.Screen name="AdminCustomers" component={AdminSectionScreen} />
+            <Stack.Screen name="AdminInventory" component={AdminSectionScreen} />
             <Stack.Screen name="AdminPayroll" component={AdminSectionScreen} />
             <Stack.Screen name="AdminAccounting" component={AdminSectionScreen} />
+            <Stack.Screen name="AdminServices" component={AdminSectionScreen} />
+            <Stack.Screen name="AdminNotifications" component={AdminSectionScreen} />
+            <Stack.Screen name="AdminReports" component={AdminSectionScreen} />
             <Stack.Screen name="AdminCompanySettings" component={AdminSectionScreen} />
         </Stack.Navigator>
     );

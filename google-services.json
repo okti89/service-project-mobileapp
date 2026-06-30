@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "95288334175",
+    "project_id": "servicemanagement-bc9dd",
+    "storage_bucket": "servicemanagement-bc9dd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95288334175:android:6e6b60b28448d24af648ea",
+        "android_client_info": {
+          "package_name": "com.servis.asistani"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAck7FywuE6pKiOQk6aOHwVtgicMj5u6Pc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

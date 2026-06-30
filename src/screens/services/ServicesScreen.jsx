@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import dayjs from 'dayjs';
@@ -7,6 +7,8 @@ import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
 import ServiceDateFilter from '@/components/home/ServiceDateFilter';
 import ServiceListItem from '@/components/home/ServiceListItem';
+import ServiceActionsSheet from '@/components/home/ServiceActionsSheet';
+import TechnicianPickerSheet from '@/components/home/TechnicianPickerSheet';
 import TechnicianFilterSheet from '@/components/services/TechnicianFilterSheet';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -15,33 +17,71 @@ import technicianService from '@/services/technicianService';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+const clearTechnicianFields = (service = {}) => ({
+    ...service,
+    technician: null,
+    technician_name: null,
+    technician_full_name: null,
+    technician_avatar: null,
+    technician_avatar_url: null,
+    assigned_technician_avatar: null,
+    assigned_technician_avatar_url: null,
+    technician_user: null,
+    technician_user_id: null,
+    user: null,
+    user_id: null,
+});
+
+const mergeUpdatedService = (currentService, updatedService) => {
+    const merged = { ...currentService, ...updatedService };
+    return merged?.technician == null ? clearTechnicianFields(merged) : merged;
+};
+
+const isServiceAssignmentLocked = (service) => {
+    const statusKey = String(service?.service_status || '').trim().toLowerCase();
+    const isCompleted = statusKey === 'completed';
+    const scheduled = service?.scheduled_date ? dayjs(service.scheduled_date) : null;
+    const isPastDate = scheduled ? scheduled.startOf('day').isBefore(dayjs().startOf('day')) : false;
+    return isCompleted || isPastDate;
+};
+
 const ServicesScreen = () => {
     const navigation = useNavigation();
     const { colors, isDark } = useTheme();
-    const { isAdmin, userInfo } = useAuth();
+    const { isAdmin } = useAuth();
 
     const [services, setServices] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [techniciansLoading, setTechniciansLoading] = useState(false);
+    const [technicianUpdateLoading, setTechnicianUpdateLoading] = useState(false);
     const [error, setError] = useState(null);
     const [selectedDate, setSelectedDate] = useState(() => new Date());
     const [activeMonth, setActiveMonth] = useState(() => dayjs().startOf('month').toDate());
     const [selectedTechnicianId, setSelectedTechnicianId] = useState(null);
+    const [selectedService, setSelectedService] = useState(null);
+    const [technicianTargetService, setTechnicianTargetService] = useState(null);
 
-    const technicianSheetRef = useRef(null);
+    const technicianFilterSheetRef = useRef(null);
+    const technicianPickerSheetRef = useRef(null);
+    const actionsSheetRef = useRef(null);
     const stateRef = useRef({ activeMonth, isAdmin });
 
     useEffect(() => {
         stateRef.current = { activeMonth, isAdmin };
     }, [activeMonth, isAdmin]);
 
-    const fetchServices = useCallback(async () => {
+    const fetchServices = useCallback(async ({ isRefresh = false } = {}) => {
         const currentMonth = stateRef.current.activeMonth;
         const adminMode = stateRef.current.isAdmin;
 
         try {
-            setLoading(true);
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
+                setLoading(true);
+            }
             setError(null);
 
             const params = {
@@ -60,32 +100,27 @@ const ServicesScreen = () => {
             setServices([]);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     }, []);
 
     const fetchTechnicians = useCallback(async () => {
+        if (!isAdmin) {
+            setTechnicians([]);
+            return;
+        }
+
         try {
             setTechniciansLoading(true);
-            if (isAdmin) {
-                const data = await technicianService.getTechnicians({ include_inactive: 'false' });
-                setTechnicians(Array.isArray(data) ? data : []);
-                return;
-            }
-
-            const fallbackTechnician = {
-                id: userInfo?.technician_profile_id || userInfo?.id || null,
-                full_name: userInfo?.full_name || `${userInfo?.first_name || ''} ${userInfo?.last_name || ''}`.trim() || 'Teknisyen',
-                email: userInfo?.email || null,
-                phone_number: userInfo?.phone_number || null,
-            };
-            setTechnicians(fallbackTechnician.id ? [fallbackTechnician] : []);
+            const data = await technicianService.getTechnicians({ include_inactive: 'false' });
+            setTechnicians(Array.isArray(data) ? data : []);
         } catch (err) {
             console.warn('ServicesScreen technician fetch error:', err?.response?.data || err?.message);
             setTechnicians([]);
         } finally {
             setTechniciansLoading(false);
         }
-    }, [isAdmin, userInfo]);
+    }, [isAdmin]);
 
     useEffect(() => {
         fetchServices();
@@ -94,6 +129,16 @@ const ServicesScreen = () => {
     useEffect(() => {
         fetchTechnicians();
     }, [fetchTechnicians]);
+
+    useEffect(() => {
+        if (!isAdmin) {
+            setSelectedTechnicianId(null);
+        }
+    }, [isAdmin]);
+
+    const handleRefresh = useCallback(() => {
+        fetchServices({ isRefresh: true });
+    }, [fetchServices]);
 
     const handleMonthChange = useCallback((monthDate) => {
         setActiveMonth(dayjs(monthDate).startOf('month').toDate());
@@ -109,7 +154,7 @@ const ServicesScreen = () => {
     }, []);
 
     const filteredByTechnician = useMemo(() => {
-        if (!selectedTechnicianId) return services;
+        if (!isAdmin || !selectedTechnicianId) return services;
         return services.filter((service) => {
             const ids = [
                 service?.technician,
@@ -121,7 +166,7 @@ const ServicesScreen = () => {
             ].map((item) => (item == null ? null : Number(item)));
             return ids.includes(Number(selectedTechnicianId));
         });
-    }, [services, selectedTechnicianId]);
+    }, [isAdmin, services, selectedTechnicianId]);
 
     const filteredServices = useMemo(() => {
         const targetDate = dayjs(selectedDate).format('YYYY-MM-DD');
@@ -147,17 +192,86 @@ const ServicesScreen = () => {
         return match?.full_name || match?.name || 'Teknisyen';
     }, [selectedTechnicianId, technicians]);
 
-    const handleOpenTechnicianSheet = useCallback(() => {
-        technicianSheetRef.current?.present();
-    }, []);
+    const handleOpenTechnicianFilterSheet = useCallback(() => {
+        if (!isAdmin) return;
+        technicianFilterSheetRef.current?.present();
+    }, [isAdmin]);
 
-    const handleServicePress = useCallback((service) => {
+    const openServiceDetail = useCallback((service) => {
         if (!service?.id) return;
         navigation.navigate('ServiceDetail', {
             serviceId: service.id,
             service,
         });
     }, [navigation]);
+
+    const handleServicePress = useCallback((service) => {
+        openServiceDetail(service);
+    }, [openServiceDetail]);
+
+    const handleServiceActions = useCallback((service) => {
+        setSelectedService(service);
+        actionsSheetRef.current?.present();
+    }, []);
+
+    const handleTechnicianPress = useCallback(async (service) => {
+        if (!isAdmin || !service?.id || isServiceAssignmentLocked(service)) return;
+
+        setTechnicianTargetService(service);
+        technicianPickerSheetRef.current?.present();
+
+        if (!technicians.length && !techniciansLoading) {
+            await fetchTechnicians();
+        }
+    }, [fetchTechnicians, isAdmin, technicians.length, techniciansLoading]);
+
+    const handleTechnicianSelect = useCallback(async (technician) => {
+        if (!technicianTargetService?.id) return;
+
+        const nextTechnicianId = technician?.id ?? null;
+        const currentTechnicianId = technicianTargetService?.technician ?? null;
+
+        if (nextTechnicianId === currentTechnicianId) {
+            technicianPickerSheetRef.current?.dismiss();
+            return;
+        }
+
+        try {
+            setTechnicianUpdateLoading(true);
+            const updatedService = await serviceService.updateAdminService(technicianTargetService.id, {
+                technician: nextTechnicianId,
+            });
+
+            setServices((prev) => prev.map((item) => (
+                item?.id === technicianTargetService.id
+                    ? mergeUpdatedService(item, updatedService)
+                    : item
+            )));
+            setSelectedService((prev) => (
+                prev?.id === technicianTargetService.id
+                    ? mergeUpdatedService(prev, updatedService)
+                    : prev
+            ));
+            setTechnicianTargetService((prev) => (
+                prev?.id === technicianTargetService.id
+                    ? mergeUpdatedService(prev, updatedService)
+                    : prev
+            ));
+            technicianPickerSheetRef.current?.dismiss();
+        } catch (err) {
+            console.warn('ServicesScreen technician update error:', err?.response?.data || err?.message);
+            Alert.alert('Hata', 'Teknisyen değiştirilemedi.');
+        } finally {
+            setTechnicianUpdateLoading(false);
+        }
+    }, [technicianTargetService]);
+
+    const handleSheetAction = useCallback((actionKey, service) => {
+        if (!service) return;
+        if (actionKey === 'detail' || actionKey === 'reschedule') {
+            openServiceDetail(service);
+        }
+    }, [openServiceDetail]);
 
     return (
         <WrapperContainer withTabBar>
@@ -173,34 +287,45 @@ const ServicesScreen = () => {
                     loading={loading}
                 />
 
-                <View style={styles.filterRow}>
-                    <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Teknisyen filtresi</Text>
-                    <Pressable
-                        onPress={handleOpenTechnicianSheet}
-                        style={({ pressed }) => [
-                            styles.filterButton,
-                            {
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
-                                opacity: pressed ? 0.9 : 1,
-                            },
-                        ]}
-                    >
-                        <View style={styles.filterButtonTextWrap}>
-                            <Text style={[styles.filterButtonTitle, { color: colors.text }]}>Teknisyen</Text>
-                            <Text style={[styles.filterButtonValue, { color: selectedTechnicianId ? colors.primary : colors.textTertiary }]} numberOfLines={1}>
-                                {techniciansLoading ? 'Yükleniyor...' : selectedTechnicianLabel}
-                            </Text>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textTertiary} />
-                    </Pressable>
-                </View>
+                {isAdmin ? (
+                    <View style={styles.filterRow}>
+                        <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Teknisyen filtresi</Text>
+                        <Pressable
+                            onPress={handleOpenTechnicianFilterSheet}
+                            style={({ pressed }) => [
+                                styles.filterButton,
+                                {
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                                    borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
+                                    opacity: pressed ? 0.9 : 1,
+                                },
+                            ]}
+                        >
+                            <View style={styles.filterButtonTextWrap}>
+                                <Text style={[styles.filterButtonTitle, { color: colors.text }]}>Teknisyen</Text>
+                                <Text style={[styles.filterButtonValue, { color: selectedTechnicianId ? colors.primary : colors.textTertiary }]} numberOfLines={1}>
+                                    {techniciansLoading ? 'Yükleniyor...' : selectedTechnicianLabel}
+                                </Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textTertiary} />
+                        </Pressable>
+                    </View>
+                ) : null}
             </View>
 
             <ScrollView
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                refreshControl={(
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        tintColor={colors.primary}
+                        colors={[colors.primary]}
+                        progressViewOffset={12}
+                    />
+                )}
             >
                 {loading ? (
                     <View style={styles.stateBlock}>
@@ -220,20 +345,41 @@ const ServicesScreen = () => {
                 ) : (
                     filteredServices.map((service, index) => (
                         <ServiceListItem
-                            key={service?.id || `${service?.receipt_number || 'service'}-${index}`}
+                            key={index}
                             service={service}
                             onPress={handleServicePress}
+                            onPressActions={handleServiceActions}
+                            onPressTechnician={handleTechnicianPress}
+                            isTechnicianEditable={isAdmin && !isServiceAssignmentLocked(service)}
                         />
                     ))
                 )}
             </ScrollView>
 
-            <TechnicianFilterSheet
-                ref={technicianSheetRef}
-                technicians={technicians}
-                selectedTechnicianId={selectedTechnicianId}
-                onSelect={setSelectedTechnicianId}
+            <ServiceActionsSheet
+                ref={actionsSheetRef}
+                service={selectedService}
+                onAction={handleSheetAction}
             />
+
+            {isAdmin ? (
+                <>
+                    <TechnicianFilterSheet
+                        ref={technicianFilterSheetRef}
+                        technicians={technicians}
+                        selectedTechnicianId={selectedTechnicianId}
+                        onSelect={setSelectedTechnicianId}
+                    />
+                    <TechnicianPickerSheet
+                        ref={technicianPickerSheetRef}
+                        technicians={technicians}
+                        loading={techniciansLoading}
+                        submitting={technicianUpdateLoading}
+                        selectedTechnicianId={technicianTargetService?.technician ?? null}
+                        onSelect={handleTechnicianSelect}
+                    />
+                </>
+            ) : null}
         </WrapperContainer>
     );
 };

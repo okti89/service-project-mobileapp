@@ -35,6 +35,7 @@
         TECHNICIAN_DETAIL: (id) => `services/technician-services/${id}/`,
         ADMIN_LIST: 'services/admin-services/',
         ADMIN_DETAIL: (id) => `services/admin-services/${id}/`,
+        STATUS_LIST: 'services/service-statuses/',
     },
     CUSTOMERS: {
         LIST: 'customers/customer-list/',

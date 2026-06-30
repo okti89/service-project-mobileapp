@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Image,
     Platform,
@@ -58,6 +58,7 @@ const HomeProfileCard = ({ userInfo, shiftSummary, onPressShift }) => {
     const shouldStopShift = Boolean(shiftSummary?.shouldStopShift);
     const shiftButtonLabel = shouldStopShift ? 'Mesaiyi Bitir' : 'Mesai Başlat';
     const shiftButtonColor = shouldStopShift ? colors.error : colors.success;
+    const remainingShortLabel = shiftSummary?.remainingLabel === 'Fazla mesai' ? 'Fazla' : 'Kalan';
     const progressValue = Math.max(0, Math.min(100, Number(shiftSummary?.completedPercentage || 0)));
     const progressWidth = `${progressValue}%`;
 
@@ -174,32 +175,40 @@ const HomeProfileCard = ({ userInfo, shiftSummary, onPressShift }) => {
                             </View>
 
                             <View style={styles.progressFooter}>
-                                <Text style={[styles.progressHint, { color: colors.textTertiary }]}>
+                                <Text
+                                    style={[styles.progressHint, { color: colors.textTertiary }]}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                >
                                     Çalışılan {shiftSummary.workedDurationLabel || '00:00:00'}
                                 </Text>
-                                <Text style={[styles.progressHint, { color: colors.textTertiary }]}>
-                                    {shiftSummary.remainingLabel}: {shiftSummary.remainingDurationLabel || '00:00:00'}
+                                <Text
+                                    style={[styles.progressHint, styles.progressHintRight, { color: colors.textTertiary }]}
+                                    numberOfLines={1}
+                                    ellipsizeMode="tail"
+                                >
+                                    {`${remainingShortLabel}: ${shiftSummary.remainingDurationLabel || '00:00:00'}`}
                                 </Text>
                             </View>
                         </View>
 
                         <Pressable
                             onPress={onPressShift}
-                            android_ripple={{ color: `${shiftButtonColor}16`, borderless: false }}
+                            android_ripple={{ color: shouldStopShift ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.18)', borderless: false }}
                             style={({ pressed }) => [
                                 styles.shiftButton,
                                 {
-                                    backgroundColor: pressed ? `${shiftButtonColor}18` : `${shiftButtonColor}10`,
-                                    borderColor: `${shiftButtonColor}22`,
+                                    backgroundColor: pressed ? `${shiftButtonColor}D9` : shiftButtonColor,
+                                    borderColor: shiftButtonColor,
                                 },
                             ]}
                         >
                             <MaterialCommunityIcons
                                 name={shouldStopShift ? 'stop-circle-outline' : 'play-circle-outline'}
                                 size={16}
-                                color={shiftButtonColor}
+                                color="#FFFFFF"
                             />
-                            <Text style={[styles.shiftButtonText, { color: shiftButtonColor }]}>{shiftButtonLabel}</Text>
+                            <Text style={styles.shiftButtonText}>{shiftButtonLabel}</Text>
                         </Pressable>
                     </View>
                 ) : null}
@@ -365,21 +374,29 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '600',
         flex: 1,
+        minWidth: 0,
+    },
+    progressHintRight: {
+        textAlign: 'right',
     },
     shiftButton: {
         minHeight: 38,
-        borderRadius: 12,
+        minWidth: 126,
+        borderRadius: 0,
         borderWidth: 1,
         paddingHorizontal: spacing.m,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.xs + 1,
+        alignSelf: 'flex-end',
+        marginBottom: 2,
     },
     shiftButtonText: {
         fontSize: 12,
         fontWeight: '800',
         letterSpacing: -0.1,
+        color: '#FFFFFF',
     },
 });
 

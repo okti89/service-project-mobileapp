@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,7 +15,7 @@ import AdminPanelNavigator from "@/navigation/AdminPanelNavigator";
 
 const Tab = createBottomTabNavigator();
 
-function CenterTabButton({ primaryColor, surfaceColor, focused }) {
+function CenterTabButton({ primaryColor, surfaceColor, focused, isAdmin }) {
     const route = useRoute();
     if (route?.name !== 'AdminPanel') return null;
 
@@ -28,7 +28,7 @@ function CenterTabButton({ primaryColor, surfaceColor, focused }) {
             friction: 4,
             tension: 140,
         }).start();
-    }, [focused]);
+    }, [focused, scaleAnim]);
 
     return (
         <View style={styles.centerOuter}>
@@ -48,7 +48,7 @@ function CenterTabButton({ primaryColor, surfaceColor, focused }) {
                     ]}
                 >
                     <MaterialCommunityIcons
-                        name="shield-crown"
+                        name={isAdmin ? 'shield-crown' : 'account-hard-hat'}
                         size={26}
                         color={focused ? '#FFFFFF' : primaryColor}
                     />
@@ -78,7 +78,7 @@ function RegularTabIcon({ focused, color }) {
     );
 }
 
-function TabIconRouter({ focused, color, primaryColor, surfaceColor }) {
+function TabIconRouter({ focused, color, primaryColor, surfaceColor, isAdmin }) {
     const route = useRoute();
     if (route?.name === 'AdminPanel') {
         return (
@@ -86,6 +86,7 @@ function TabIconRouter({ focused, color, primaryColor, surfaceColor }) {
                 primaryColor={primaryColor}
                 surfaceColor={surfaceColor}
                 focused={focused}
+                isAdmin={isAdmin}
             />
         );
     }
@@ -129,6 +130,7 @@ export default function BottomNavigation() {
                         color={color}
                         primaryColor={colors.primary}
                         surfaceColor={colors.surface}
+                        isAdmin={isAdmin}
                     />
                 ),
             }}
@@ -149,16 +151,14 @@ export default function BottomNavigation() {
                     tabBarShowLabel: true,
                 }}
             />
-            {isAdmin ? (
-                <Tab.Screen
-                    name="AdminPanel"
-                    component={AdminPanelNavigator}
-                    options={{
-                        title: 'Admin Panel',
-                        tabBarShowLabel: true,
-                    }}
-                />
-            ) : null}
+            <Tab.Screen
+                name="AdminPanel"
+                component={AdminPanelNavigator}
+                options={{
+                    title: isAdmin ? 'Admin Panel' : 'Teknisyen Paneli',
+                    tabBarShowLabel: true,
+                }}
+            />
             <Tab.Screen
                 name="Appointments"
                 component={AppointmentsScreen}
