@@ -66,6 +66,7 @@ const PRIMARY_ACTIONS = [
     { key: 'detail', icon: 'arrow-right-bold-circle-outline', color: '#5C6370', label: 'Servis Detayı', description: 'Tüm bilgileri görüntüle' },
     { key: 'status', icon: 'sync', color: '#2196F3', label: 'Durumu Güncelle', description: 'Servis durumunu değiştir' },
     { key: 'pdf', icon: 'file-pdf-box', color: '#E53935', label: 'PDF Oluştur', description: 'Servis raporunu paylaş' },
+    { key: 'warranty-pdf', icon: 'shield-check-outline', color: '#0EA5E9', label: 'Garanti Belgesi', description: 'Süre seç, görüntüle veya paylaş' },
 ];
 
 const QUICK_ACTIONS = [

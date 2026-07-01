@@ -58,6 +58,14 @@ const ADMIN_MENU_ITEMS = [
         color: serviceGreen,
     },
     {
+        key: 'map-usage-test',
+        icon: 'test-tube',
+        label: 'Map & Geocoding KOTA Testi',
+        description: 'Tile yükleme ve reverse geocoding sayaçlarını izle',
+        route: 'AdminMapUsageTest',
+        color: '#7B61FF',
+    },
+    {
         key: 'technicians-shifts',
         icon: 'clock-outline',
         label: 'Teknisyen Mesaileri',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -16,6 +16,7 @@ import 'dayjs/locale/tr';
 import serviceService from '@/services/serviceService';
 import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
+import WarrantySheet from '@/components/services/WarrantySheet';
 import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -557,25 +558,81 @@ const ServiceDetailScreen = ({ route, navigation }) => {
                 ) : null}
 
                 {/* Garanti */}
-                {warranty ? (
-                    <Section title="GARANTİ BELGESİ" icon="shield-check-outline">
-                        <InfoRow
-                            icon="shield-star-outline"
-                            label="Belge No"
-                            value={warranty.certificate_number}
-                        />
-                        {warranty.expiry_date ? (
-                            <>
-                                <Divider />
-                                <InfoRow
-                                    icon="calendar-end"
-                                    label="Bitiş Tarihi"
-                                    value={dayjs(warranty.expiry_date).format('DD MMMM YYYY')}
-                                />
-                            </>
-                        ) : null}
-                    </Section>
-                ) : null}
+                <Section
+                    title="GARANTİ BELGESİ"
+                    icon="shield-check-outline"
+                    rightAction={
+                        <Pressable
+                            onPress={() => warrantySheetRef.current?.present()}
+                            style={({ pressed }) => [
+                                styles.warrantyCreateBtn,
+                                {
+                                    backgroundColor: pressed ? '#0EA5E925' : '#0EA5E915',
+                                    borderColor: '#0EA5E940',
+                                    opacity: pressed ? 0.85 : 1,
+                                },
+                            ]}
+                        >
+                            <MaterialCommunityIcons name="file-pdf-box" size={14} color="#0EA5E9" />
+                            <Text style={styles.warrantyCreateText}>
+                                {warranty ? 'Oluştur / Paylaş' : 'Oluştur'}
+                            </Text>
+                        </Pressable>
+                    }
+                >
+                    {warranty ? (
+                        <>
+                            <InfoRow
+                                icon="shield-star-outline"
+                                label="Belge No"
+                                value={warranty.certificate_number}
+                            />
+                            {warranty.warranty_months ? (
+                                <>
+                                    <Divider />
+                                    <InfoRow
+                                        icon="calendar-range"
+                                        label="Süre"
+                                        value={`${warranty.warranty_months} Ay`}
+                                    />
+                                </>
+                            ) : null}
+                            {warranty.expiry_date ? (
+                                <>
+                                    <Divider />
+                                    <InfoRow
+                                        icon="calendar-end"
+                                        label="Bitiş Tarihi"
+                                        value={dayjs(warranty.expiry_date).format('DD MMMM YYYY')}
+                                    />
+                                </>
+                            ) : null}
+                        </>
+                    ) : (
+                        <Pressable
+                            onPress={() => warrantySheetRef.current?.present()}
+                            style={({ pressed }) => [
+                                styles.warrantyEmpty,
+                                {
+                                    backgroundColor: pressed
+                                        ? '#0EA5E918'
+                                        : isDark
+                                            ? 'rgba(14, 165, 233, 0.08)'
+                                            : 'rgba(14, 165, 233, 0.06)',
+                                    borderColor: '#0EA5E940',
+                                },
+                            ]}
+                        >
+                            <MaterialCommunityIcons name="shield-plus-outline" size={20} color="#0EA5E9" />
+                            <Text style={[styles.warrantyEmptyText, { color: colors.text }]}>
+                                Garanti belgesi henüz oluşturulmadı
+                            </Text>
+                            <Text style={[styles.warrantyEmptyHint, { color: colors.textSecondary }]}>
+                                Garanti süresini seçmek için buraya dokun
+                            </Text>
+                        </Pressable>
+                    )}
+                </Section>
 
                 {/* Fotoğraflar */}
                 {photos.length > 0 ? (
@@ -660,6 +717,8 @@ const ServiceDetailScreen = ({ route, navigation }) => {
 
                 <View style={{ height: spacing['4xl'] }} />
             </ScrollView>
+
+            <WarrantySheet ref={warrantySheetRef} service={service} />
         </WrapperContainer>
     );
 };
@@ -742,6 +801,39 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '700',
+    },
+    warrantyCreateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        borderWidth: 1,
+    },
+    warrantyCreateText: {
+        color: '#0EA5E9',
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    warrantyEmpty: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 18,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        gap: 6,
+    },
+    warrantyEmptyText: {
+        fontSize: 14,
+        fontWeight: '800',
+        textAlign: 'center',
+    },
+    warrantyEmptyHint: {
+        fontSize: 12,
+        fontWeight: '500',
+        textAlign: 'center',
     },
 
     // Hero

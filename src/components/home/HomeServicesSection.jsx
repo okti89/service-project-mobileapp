@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
     forwardRef,
     useCallback,
     useEffect,
@@ -30,6 +30,7 @@ import ServiceListItem from '@/components/home/ServiceListItem';
 import ServiceActionsSheet from '@/components/home/ServiceActionsSheet';
 import TechnicianPickerSheet from '@/components/home/TechnicianPickerSheet';
 import StatusPickerSheet from '@/components/home/StatusPickerSheet';
+import WarrantySheet from '@/components/services/WarrantySheet';
 
 const VIEW_MODES = [
     { key: 'mine', label: 'Benim Servislerim' },
@@ -96,6 +97,7 @@ const HomeServicesSection = forwardRef(
         const actionsSheetRef = useRef(null);
         const technicianSheetRef = useRef(null);
         const statusSheetRef = useRef(null);
+        const warrantySheetRef = useRef(null);
         const stateRef = useRef({ viewMode, activeMonth, isAdmin });
 
         useEffect(() => {
@@ -321,6 +323,12 @@ const HomeServicesSection = forwardRef(
             }
         }, [statusTargetService]);
 
+        const handleWarrantyPdf = useCallback((service) => {
+            if (!service?.id) return;
+            setSelectedService(service);
+            warrantySheetRef.current?.present();
+        }, []);
+
         const handleSheetAction = useCallback(
             (actionKey, service) => {
                 if (!service) return;
@@ -335,11 +343,16 @@ const HomeServicesSection = forwardRef(
                     return;
                 }
 
+                if (actionKey === 'warranty-pdf') {
+                    handleWarrantyPdf(service);
+                    return;
+                }
+
                 if (actionKey === 'reschedule') {
                     openServiceDetail(service);
                 }
             },
-            [handleStatusPress, openServiceDetail]
+            [handleStatusPress, handleWarrantyPdf, openServiceDetail]
         );
 
         const handleViewModeChange = useCallback(
@@ -507,6 +520,8 @@ const HomeServicesSection = forwardRef(
                     selectedStatusKey={String(statusTargetService?.service_status || '').trim().toLowerCase() || null}
                     onSelect={handleStatusSelect}
                 />
+
+                <WarrantySheet ref={warrantySheetRef} service={selectedService} />
             </View>
         );
     }

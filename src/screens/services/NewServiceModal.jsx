@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
     ActivityIndicator,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -21,8 +20,9 @@ import {
     BottomSheetModal,
     BottomSheetScrollView,
     BottomSheetView,
+    Portal,
 } from '@gorhom/bottom-sheet';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePickerSheet from '@/components/DateTimePickerSheet';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 
@@ -189,8 +189,12 @@ export default function NewServiceModal({ bottomSheetRef, onCreated }) {
     const [form, setForm] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
+    const [dateTimeVisible, setDateTimeVisible] = useState(false);
+
+    useEffect(() => {
+        console.log('[NewServiceModal] mounted');
+        return () => console.log('[NewServiceModal] unmounted');
+    }, []);
 
     // Veri kaynakları
     const [customers, setCustomers] = useState([]);
@@ -340,30 +344,17 @@ export default function NewServiceModal({ bottomSheetRef, onCreated }) {
     }, [form, showToast, resetForm, bottomSheetRef, onCreated]);
 
     // ── Tarih/Saat picker handlers ──────────────────────────────────────
-    const onDateChange = useCallback(
-        (event, selected) => {
-            setShowDatePicker(false);
-            if (event?.type === 'dismissed' || !selected) return;
-            const next = new Date(form.scheduledDate);
-            next.setFullYear(selected.getFullYear());
-            next.setMonth(selected.getMonth());
-            next.setDate(selected.getDate());
-            updateField('scheduledDate', next);
+    const handleDateTimeChange = useCallback(
+        (next) => {
+            if (next) updateField('scheduledDate', next);
         },
-        [form.scheduledDate, updateField]
+        [updateField]
     );
 
-    const onTimeChange = useCallback(
-        (event, selected) => {
-            setShowTimePicker(false);
-            if (event?.type === 'dismissed' || !selected) return;
-            const next = new Date(form.scheduledDate);
-            next.setHours(selected.getHours());
-            next.setMinutes(selected.getMinutes());
-            updateField('scheduledDate', next);
-        },
-        [form.scheduledDate, updateField]
-    );
+    const openDateTimePicker = useCallback(() => {
+        console.log('[NewServiceModal] openDateTimePicker called');
+        setDateTimeVisible(true);
+    }, []);
 
     const dateLabel = dayjs(form.scheduledDate).format('DD MMMM YYYY');
     const timeLabel = dayjs(form.scheduledDate).format('HH:mm');
@@ -421,19 +412,20 @@ export default function NewServiceModal({ bottomSheetRef, onCreated }) {
     );
 
     return (
-        <BottomSheetModal
-            ref={bottomSheetRef}
-            index={0}
-            snapPoints={snapPoints}
-            backdropComponent={renderBackdrop}
-            handleComponent={null}
-            enablePanDownToClose
-            keyboardBehavior="interactive"
-            keyboardBlurBehavior="restore"
-            android_keyboardInputMode="adjustResize"
-            onDismiss={resetForm}
-        >
-            <BottomSheetView style={styles.container}>
+        <>
+            <BottomSheetModal
+                ref={bottomSheetRef}
+                index={0}
+                snapPoints={snapPoints}
+                backdropComponent={renderBackdrop}
+                handleComponent={null}
+                enablePanDownToClose
+                keyboardBehavior="interactive"
+                keyboardBlurBehavior="restore"
+                android_keyboardInputMode="adjustResize"
+                onDismiss={resetForm}
+            >
+                <BottomSheetView style={styles.container}>
                 {/* Header */}
                 <View style={styles.headerWrap}>
                     <View style={styles.handle} />
@@ -573,68 +565,54 @@ export default function NewServiceModal({ bottomSheetRef, onCreated }) {
                         })}
                     </View>
 
-                    {/* PLANLAMA */}
-                    <View style={styles.section}>
-                        <SectionTitle title="Planlama" colors={colors} />
-                        <View style={styles.dateRow}>
-                            <Pressable
-                                onPress={() => setShowDatePicker(true)}
-                                style={({ pressed }) => [
-                                    styles.dateBox,
-                                    {
-                                        backgroundColor: isDark
-                                            ? 'rgba(255,255,255,0.05)'
-                                            : '#F9FAFB',
-                                        borderColor: colors.border,
-                                        opacity: pressed ? 0.85 : 1,
-                                    },
-                                ]}
-                            >
-                                <MaterialCommunityIcons
-                                    name="calendar-outline"
-                                    size={16}
-                                    color={colors.textSecondary}
-                                />
-                                <Text
-                                    style={[
-                                        styles.dateText,
-                                        { color: colors.text },
-                                    ]}
-                                >
-                                    {dateLabel}
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                onPress={() => setShowTimePicker(true)}
-                                style={({ pressed }) => [
-                                    styles.dateBox,
-                                    {
-                                        backgroundColor: isDark
-                                            ? 'rgba(255,255,255,0.05)'
-                                            : '#F9FAFB',
-                                        borderColor: colors.border,
-                                        opacity: pressed ? 0.85 : 1,
-                                    },
-                                ]}
-                            >
-                                <MaterialCommunityIcons
-                                    name="clock-outline"
-                                    size={16}
-                                    color={colors.textSecondary}
-                                />
-                                <Text
-                                    style={[
-                                        styles.dateText,
-                                        { color: colors.text },
-                                    ]}
-                                >
-                                    {timeLabel}
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </View>
+                    {/* PLANLAMA — scroll view dışında, sabit */}
                 </BottomSheetScrollView>
+
+                <View style={styles.dateBoxOuterWrap}>
+                    <SectionTitle title="Planlama" colors={colors} />
+                    
+                    <Pressable
+                        onPress={() => {
+                            console.log('[NewServiceModal] dateBox pressed');
+                            openDateTimePicker();
+                        }}
+                        style={({ pressed }) => [
+                            styles.dateBox,
+                            {
+                                backgroundColor: isDark
+                                    ? 'rgba(255,255,255,0.05)'
+                                    : '#F9FAFB',
+                                borderColor: colors.border,
+                                opacity: pressed ? 0.85 : 1,
+                            },
+                        ]}
+                    >
+                        <View style={styles.dateBoxIconWrap}>
+                            <MaterialCommunityIcons
+                                name="calendar-clock"
+                                size={18}
+                                color={colors.primary}
+                            />
+                        </View>
+                        <View style={styles.dateBoxTextCol}>
+                            <Text
+                                style={[styles.dateBoxLabel, { color: colors.textTertiary }]}
+                            >
+                                Randevu Tarihi ve Saati
+                            </Text>
+                            <Text
+                                style={[styles.dateText, { color: colors.text }]}
+                            >
+                                {dateLabel} · {timeLabel}
+                            </Text>
+                        </View>
+                        <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={18}
+                            color={colors.textTertiary}
+                        />
+                    </Pressable>
+                </View>
 
                 {/* Sticky submit */}
                 <View
@@ -655,28 +633,16 @@ export default function NewServiceModal({ bottomSheetRef, onCreated }) {
                         variant="primary"
                     />
                 </View>
+                </BottomSheetView>
+            </BottomSheetModal>
 
-                {showDatePicker ? (
-                    <DateTimePicker
-                        mode="date"
-                        value={form.scheduledDate}
-                        onChange={onDateChange}
-                        minimumDate={new Date()}
-                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                    />
-                ) : null}
-
-                {showTimePicker ? (
-                    <DateTimePicker
-                        mode="time"
-                        value={form.scheduledDate}
-                        onChange={onTimeChange}
-                        minuteInterval={15}
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    />
-                ) : null}
-            </BottomSheetView>
-        </BottomSheetModal>
+            <DateTimePickerSheet
+                visible={dateTimeVisible}
+                value={form.scheduledDate}
+                onChange={handleDateTimeChange}
+                onClose={() => setDateTimeVisible(false)}
+            />
+        </>
     );
 }
 
@@ -732,9 +698,22 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
 
+    scrollView: {
+        flex: 1,
+    },
     scrollContent: {
         paddingHorizontal: spacing.gutter,
         paddingBottom: spacing.xl,
+    },
+
+    dateBoxOuterWrap: {
+        paddingHorizontal: spacing.gutter,
+        paddingTop: spacing.m,
+        paddingBottom: spacing.m,
+        // DEBUG: görünürlük testi
+        borderWidth: 2,
+        borderColor: 'red',
+        borderStyle: 'dashed',
     },
 
     section: {
@@ -813,24 +792,38 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
 
-    dateRow: {
-        flexDirection: 'row',
-        gap: spacing.s,
-    },
     dateBox: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: spacing.s,
+        gap: spacing.m,
+        paddingVertical: spacing.s + 4,
         paddingHorizontal: spacing.m,
-        paddingVertical: 10,
-        borderRadius: 12,
+        borderRadius: 14,
         borderWidth: 1,
-        minHeight: 44,
+    },
+    dateBoxIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(99,102,241,0.12)',
+    },
+    dateBoxTextCol: {
+        flex: 1,
+        minWidth: 0,
+    },
+    dateBoxLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
     },
     dateText: {
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: 14,
+        fontWeight: '700',
+        letterSpacing: -0.2,
+        marginTop: 2,
     },
 
     footer: {

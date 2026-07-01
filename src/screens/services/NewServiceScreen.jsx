@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
     Platform,
     Pressable,
     ScrollView,
@@ -10,7 +11,6 @@ import {
     View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal } from '@gorhom/bottom-sheet';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
@@ -20,6 +20,8 @@ import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
 import CustomButton from '@/components/CustomButton';
 import CustomInput from '@/components/CustomInput';
+import DateTimePickerSheet from '@/components/DateTimePickerSheet';
+import AppBottomSheet from '@/components/AppBottomSheet';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import customerService from '@/services/customerService';
@@ -53,8 +55,15 @@ const validate = (form) => {
 };
 
 const formatPhoneInput = (value) => {
-    const digits = String(value || '').replace(/\D/g, '');
+    let digits = String(value || '').replace(/\D/g, '');
     if (!digits) return '';
+
+    if (digits.startsWith('90') && digits.length >= 12) {
+        digits = `0${digits.slice(2)}`;
+    } else if (digits.length === 10 && digits.startsWith('5')) {
+        digits = `0${digits}`;
+    }
+
     if (digits.startsWith('0')) {
         const d = digits.slice(0, 11);
         if (d.length <= 4) return d;
@@ -62,13 +71,7 @@ const formatPhoneInput = (value) => {
         if (d.length <= 9) return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`;
         return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9, 11)}`;
     }
-    if (digits.startsWith('5')) {
-        const d = digits.slice(0, 10);
-        if (d.length <= 3) return d;
-        if (d.length <= 6) return `${d.slice(0, 3)} ${d.slice(3)}`;
-        if (d.length <= 8) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
-        return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 8)} ${d.slice(8, 10)}`;
-    }
+
     return digits;
 };
 
@@ -98,6 +101,15 @@ const filterCustomers = (rows, query) => {
 const SectionTitle = ({ title, colors }) => (
     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
 );
+
+const TIME_OPTIONS = [
+    '09:00', '09:30', '10:00', '10:30',
+    '11:00', '11:30', '13:00', '13:30',
+    '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30',
+];
+
+const buildDateOptions = () => Array.from({ length: 21 }, (_, index) => dayjs().add(index, 'day'));
 
 const InlineSelect = ({ label, value, options, onSelect, loading, colors, error }) => {
     const [open, setOpen] = useState(false);
@@ -185,13 +197,12 @@ export default function NewServiceScreen({ navigation }) {
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
     const { showToast } = useToast();
-    const customerSheetRef = useRef(null);
+    const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+    const [showAppointmentPicker, setShowAppointmentPicker] = useState(false);
 
     const [form, setForm] = useState(initialFormState);
     const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
 
     const [customers, setCustomers] = useState([]);
     const [customersLoading, setCustomersLoading] = useState(false);
@@ -285,7 +296,7 @@ export default function NewServiceScreen({ navigation }) {
             address: customer?.address || prev.address,
         }));
         setCustomerQuery('');
-        customerSheetRef.current?.dismiss();
+        setShowCustomerPicker(false);
     }, []);
 
     const createType = useCallback(async () => {
@@ -378,68 +389,92 @@ export default function NewServiceScreen({ navigation }) {
         }
     }, [form, navigation, showToast]);
 
-    const onDateChange = useCallback((event, selected) => {
-        setShowDatePicker(false);
-        if (event?.type === 'dismissed' || !selected) return;
-        const next = new Date(form.scheduledDate);
-        next.setFullYear(selected.getFullYear());
-        next.setMonth(selected.getMonth());
-        next.setDate(selected.getDate());
-        updateField('scheduledDate', next);
-    }, [form.scheduledDate, updateField]);
-
-    const onTimeChange = useCallback((event, selected) => {
-        setShowTimePicker(false);
-        if (event?.type === 'dismissed' || !selected) return;
-        const next = new Date(form.scheduledDate);
-        next.setHours(selected.getHours());
-        next.setMinutes(selected.getMinutes());
-        updateField('scheduledDate', next);
-    }, [form.scheduledDate, updateField]);
 
     const dateLabel = useMemo(() => dayjs(form.scheduledDate).format('DD MMMM YYYY'), [form.scheduledDate]);
     const timeLabel = useMemo(() => dayjs(form.scheduledDate).format('HH:mm'), [form.scheduledDate]);
+    const dayLabel = useMemo(() => dayjs(form.scheduledDate).format('dddd'), [form.scheduledDate]);
+    const appointmentDates = useMemo(() => buildDateOptions(), []);
 
-    const renderInput = (key, label, options = {}) => (
-        <CustomInput
-            label={`${label}${options.required ? ' *' : ''}`}
-            value={form[key]}
-            onChangeText={(text) => updateField(key, text)}
-            error={errors[key]}
-            isPhone={options.phone}
-            keyboardType={options.keyboardType}
-            multiline={options.multiline}
-            numberOfLines={options.multiline ? 4 : 1}
-            placeholder={options.placeholder || label}
-            inputContainerStyle={[
-                styles.textInput,
-                options.multiline && styles.textArea,
-                {
-                    backgroundColor: colors.surface,
-                    height: options.multiline ? undefined : 55,
-                    alignItems: options.multiline ? 'flex-start' : 'center',
-                    paddingTop: options.multiline ? 12 : undefined,
-                },
-            ]}
-            style={[
-                styles.customInputText,
-                {
-                    color: colors.text,
-                    textAlignVertical: options.multiline ? 'top' : 'center',
-                },
-            ]}
-        />
-    );
+    const handleSelectDate = useCallback((date) => {
+        const current = dayjs(form.scheduledDate);
+        const selected = dayjs(date)
+            .hour(current.hour())
+            .minute(current.minute())
+            .second(0)
+            .millisecond(0);
+        updateField('scheduledDate', selected.toDate());
+    }, [form.scheduledDate, updateField]);
+
+    const handleSelectTime = useCallback((time) => {
+        const [hour, minute] = time.split(':').map(Number);
+        const selected = dayjs(form.scheduledDate)
+            .hour(hour)
+            .minute(minute)
+            .second(0)
+            .millisecond(0);
+        updateField('scheduledDate', selected.toDate());
+    }, [form.scheduledDate, updateField]);
+
+    const renderInput = (key, label, options = {}) => {
+        if (options.multiline) {
+            return (
+                <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: errors[key] ? serviceRed : colors.textSecondary }]}>
+                        {label}
+                        {options.required ? <Text style={{ color: serviceRed }}> *</Text> : null}
+                    </Text>
+                    <TextInput
+                        value={form[key]}
+                        onChangeText={(text) => updateField(key, text)}
+                        placeholder={options.placeholder || label}
+                        placeholderTextColor={colors.textTertiary}
+                        keyboardType={options.keyboardType}
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                        style={[
+                            styles.textInput,
+                            styles.textArea,
+                            styles.nativeTextArea,
+                            {
+                                backgroundColor: colors.surface,
+                                borderColor: errors[key] ? serviceRed : colors.border,
+                                color: colors.text,
+                            },
+                        ]}
+                    />
+                    {errors[key] ? <Text style={styles.errorText}>{errors[key]}</Text> : null}
+                </View>
+            );
+        }
+
+        return (
+            <CustomInput
+                label={`${label}${options.required ? ' *' : ''}`}
+                value={form[key]}
+                onChangeText={(text) => updateField(key, text)}
+                error={errors[key]}
+                isPhone={options.phone}
+                keyboardType={options.keyboardType}
+                placeholder={options.placeholder || label}
+            />
+        );
+    };
     return (
-        <WrapperContainer keyboardAvoiding>
+        <WrapperContainer>
             <Header title="Yeni Servis" subtitle="Müşteri ve cihaz bilgilerini girin" showBack borderBottom />
 
-            <ScrollView style={styles.screen} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <KeyboardAvoidingView
+                style={styles.contentWrap}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+            >
+                <ScrollView style={styles.screen} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.section}>
                     <SectionTitle title="MÜŞTERİ" colors={colors} />
                     <View style={styles.fieldWrap}>
                         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Kayıtlı müşteri</Text>
-                        <Pressable onPress={() => customerSheetRef.current?.present()} style={({ pressed }) => [styles.customerPicker, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.92 : 1 }]}>
+                        <Pressable onPress={() => setShowCustomerPicker(true)} style={({ pressed }) => [styles.customerPicker, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.92 : 1 }]}>
                             <View style={styles.customerPickerLeft}>
                                 <View style={styles.customerAvatar}><Text style={styles.customerAvatarText}>{getInitials(form.customer?.full_name)}</Text></View>
                                 <View style={styles.customerPickerTextWrap}>
@@ -456,6 +491,32 @@ export default function NewServiceScreen({ navigation }) {
                     {renderInput('address', 'Adres', { required: true, multiline: true })}
                 </View>
 
+                <View style={styles.section}>
+                    <SectionTitle title="Randevu Saati" colors={colors} />
+                    <Pressable
+                        onPress={() => {
+                            console.log('[NewServiceScreen] appointmentBox pressed');
+                            setShowAppointmentPicker(true);
+                        }}
+                        style={({ pressed }) => [
+                            styles.appointmentBox,
+                            {
+                                backgroundColor: colors.surface,
+                                borderColor: colors.border,
+                                opacity: pressed ? 0.92 : 1,
+                            },
+                        ]}
+                    >
+                        <View style={styles.appointmentIconWrap}>
+                            <MaterialCommunityIcons name="calendar-clock-outline" size={20} color={serviceBlue} />
+                        </View>
+                        <View style={styles.appointmentTextWrap}>
+                            <Text style={[styles.appointmentDate, { color: colors.text }]}>{dateLabel}</Text>
+                            <Text style={[styles.appointmentMeta, { color: colors.textSecondary }]}>{dayLabel} · {timeLabel}</Text>
+                        </View>
+                        <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textSecondary} />
+                    </Pressable>
+                </View>
                 <View style={styles.section}>
                     <SectionTitle title="CİHAZ" colors={colors} />
                     <InlineSelect label="Cihaz türü" value={form.deviceType?.name} options={deviceTypes.map((item) => ({ id: item.id, name: item.name }))} onSelect={(option) => updateField('deviceType', deviceTypes.find((item) => String(item.id) === String(option.id)) || null)} loading={deviceTypesLoading} colors={colors} error={errors.device_type} />
@@ -474,30 +535,30 @@ export default function NewServiceScreen({ navigation }) {
                     {renderInput('faultDescription', 'Arıza açıklaması', { required: true, multiline: true, placeholder: 'Cihazdaki sorunu kısaca açıklayın' })}
                 </View>
 
-                <View style={styles.section}>
-                    <SectionTitle title="PLANLAMA" colors={colors} />
-                    <View style={styles.dateRow}>
-                        <Pressable onPress={() => setShowDatePicker(true)} style={({ pressed }) => [styles.dateBox, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.9 : 1 }]}>
-                            <MaterialCommunityIcons name="calendar-outline" size={16} color={colors.textSecondary} />
-                            <Text style={[styles.dateText, { color: colors.text }]}>{dateLabel}</Text>
-                        </Pressable>
-                        <Pressable onPress={() => setShowTimePicker(true)} style={({ pressed }) => [styles.dateBox, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.9 : 1 }]}>
-                            <MaterialCommunityIcons name="clock-outline" size={16} color={colors.textSecondary} />
-                            <Text style={[styles.dateText, { color: colors.text }]}>{timeLabel}</Text>
-                        </Pressable>
-                    </View>
-                </View>
-            </ScrollView>
 
-            <View style={[styles.footer, { borderTopColor: colors.divider, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, spacing.m) }]}>
+                </ScrollView>
+
+                <View style={[styles.footer, { borderTopColor: colors.divider, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, spacing.m) }]}>
                 <CustomButton title={submitting ? 'Oluşturuluyor...' : 'Servisi Oluştur'} onPress={handleSubmit} loading={submitting} disabled={submitting} size="md" variant="primary" gradient={[serviceBlue, serviceBlue]} block />
-            </View>
+                </View>
+            </KeyboardAvoidingView>
 
-            <BottomSheetModal ref={customerSheetRef} index={0} snapPoints={['78%']} backdropComponent={renderBackdrop} handleComponent={null} enablePanDownToClose backgroundStyle={{ backgroundColor: colors.surface }}>
+            <DateTimePickerSheet
+                visible={showAppointmentPicker}
+                value={form.scheduledDate}
+                onChange={(next) => updateField('scheduledDate', next)}
+                onClose={() => setShowAppointmentPicker(false)}
+            />
+            <AppBottomSheet
+                visible={showCustomerPicker}
+                onClose={() => setShowCustomerPicker(false)}
+                snapPoints={['78%']}
+                wrapContent={false}
+            >
                 <View style={styles.sheetContainer}>
                     <View style={styles.sheetHeader}>
                         <Text style={[styles.sheetTitle, { color: colors.text }]}>Müşteri seç</Text>
-                        <Pressable onPress={() => customerSheetRef.current?.dismiss()} style={styles.sheetCloseBtn}><MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} /></Pressable>
+                        <Pressable onPress={() => setShowCustomerPicker(false)} style={styles.sheetCloseBtn}><MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} /></Pressable>
                     </View>
                     <View style={[styles.searchBox, { backgroundColor: colors.surfaceMuted || colors.surface, borderColor: colors.border }]}> 
                         <MaterialCommunityIcons name="magnify" size={18} color={colors.textTertiary} />
@@ -522,15 +583,15 @@ export default function NewServiceScreen({ navigation }) {
                         ListEmptyComponent={<View style={styles.emptyState}>{customersLoading ? <ActivityIndicator size="small" color={serviceBlue} /> : <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Müşteri bulunamadı</Text>}</View>}
                     />
                 </View>
-            </BottomSheetModal>
+            </AppBottomSheet>
 
-            {showDatePicker ? <DateTimePicker mode="date" value={form.scheduledDate} onChange={onDateChange} minimumDate={new Date()} display={Platform.OS === 'ios' ? 'inline' : 'default'} /> : null}
-            {showTimePicker ? <DateTimePicker mode="time" value={form.scheduledDate} onChange={onTimeChange} minuteInterval={15} display={Platform.OS === 'ios' ? 'spinner' : 'default'} /> : null}
+
         </WrapperContainer>
     );
 }
 
 const styles = StyleSheet.create({
+    contentWrap: { flex: 1 },
     screen: { flex: 1 },
     scrollContent: { paddingHorizontal: spacing.gutter, paddingTop: spacing.m },
     section: { marginBottom: spacing.l },
@@ -559,9 +620,20 @@ const styles = StyleSheet.create({
     customerPickerTextWrap: { flex: 1, minWidth: 0 },
     customerPickerLabel: { fontSize: 11, fontWeight: '700', marginBottom: 2 },
     customerPickerValue: { fontSize: 14, fontWeight: '600' },
-    dateRow: { flexDirection: 'row', gap: spacing.s },
-    dateBox: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, flexDirection: 'row', alignItems: 'center', gap: spacing.s },
-    dateText: { fontSize: 13, fontWeight: '600' },
+    appointmentBox: { minHeight: 62, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, flexDirection: 'row', alignItems: 'center', gap: spacing.s },
+    appointmentIconWrap: { width: 38, height: 38, borderRadius: 12, backgroundColor: `${serviceBlue}14`, alignItems: 'center', justifyContent: 'center' },
+    appointmentTextWrap: { flex: 1, minWidth: 0 },
+    appointmentDate: { fontSize: 14, fontWeight: '700', textTransform: 'capitalize' },
+    appointmentMeta: { fontSize: 12, fontWeight: '600', marginTop: 2, textTransform: 'capitalize' },
+    sheetSectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: spacing.s },
+    appointmentDateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginBottom: spacing.l },
+    appointmentDateCell: { width: '22.8%', minHeight: 68, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.s },
+    appointmentDayName: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+    appointmentDayNumber: { fontSize: 18, fontWeight: '800', marginTop: 2 },
+    appointmentMonthName: { fontSize: 10, fontWeight: '700', marginTop: 2, textTransform: 'capitalize' },
+    timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginBottom: spacing.l },
+    timeChip: { width: '22.8%', minHeight: 42, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    timeChipText: { fontSize: 13, fontWeight: '800' },
     footer: { paddingHorizontal: spacing.gutter, paddingTop: spacing.m, borderTopWidth: StyleSheet.hairlineWidth },
     sheetContainer: { flex: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.s },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.m },

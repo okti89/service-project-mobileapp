@@ -14,6 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import dayjs from 'dayjs';
 import WrapperContainer from '@/components/WrapperContainer';
 import Header from '@/components/Header';
+import WarrantySheet from '@/components/services/WarrantySheet';
 import ServiceDateFilter from '@/components/home/ServiceDateFilter';
 import ServiceListItem from '@/components/home/ServiceListItem';
 import ServiceActionsSheet from '@/components/home/ServiceActionsSheet';
@@ -76,6 +77,7 @@ const ServicesScreen = () => {
     const technicianFilterSheetRef = useRef(null);
     const technicianPickerSheetRef = useRef(null);
     const actionsSheetRef = useRef(null);
+    const warrantySheetRef = useRef(null);
     const stateRef = useRef({ activeMonth, isAdmin });
     const hasHandledInitialFocusRef = useRef(false);
 
@@ -298,12 +300,22 @@ const ServicesScreen = () => {
         }
     }, [technicianTargetService]);
 
+    const handleWarrantyPdf = useCallback((service) => {
+        if (!service?.id) return;
+        setSelectedService(service);
+        warrantySheetRef.current?.present();
+    }, []);
+
     const handleSheetAction = useCallback((actionKey, service) => {
         if (!service) return;
         if (actionKey === 'detail' || actionKey === 'reschedule') {
             openServiceDetail(service);
+            return;
         }
-    }, [openServiceDetail]);
+        if (actionKey === 'warranty-pdf') {
+            handleWarrantyPdf(service);
+        }
+    }, [handleWarrantyPdf, openServiceDetail]);
 
     const headerAction = canCreateService ? (
         <Pressable
@@ -425,6 +437,7 @@ const ServicesScreen = () => {
                         selectedTechnicianId={technicianTargetService?.technician ?? null}
                         onSelect={handleTechnicianSelect}
                     />
+                    <WarrantySheet ref={warrantySheetRef} service={selectedService} />
                 </>
             ) : null}
         </WrapperContainer>

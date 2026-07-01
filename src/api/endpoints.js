@@ -35,6 +35,7 @@
         TECHNICIAN_DETAIL: (id) => `services/technician-services/${id}/`,
         ADMIN_LIST: 'services/admin-services/',
         ADMIN_DETAIL: (id) => `services/admin-services/${id}/`,
+        ADMIN_WARRANTY_PDF: (id) => `services/admin-services/${id}/warranty-pdf/`,
         STATUS_LIST: 'services/service-statuses/',
     },
     CUSTOMERS: {
@@ -49,6 +50,19 @@
     NOTIFICATIONS: {
         LIST: 'notifications/notifications/',
         DETAIL: (id) => `notifications/notifications/${id}/`,
+    },
+    MAPS: {
+        // /maps/geocode/ iki yonludur:
+        //   Forward  - POST { address }       (adres -> lat/lon)
+        //   Reverse  - GET ?lat=&lon=         (lat/lon -> adres)
+        // Her iki yon ayni 'geocode' api type kotasini harcar.
+        GEOCODE: 'maps/geocode/',
+    },
+    PRODUCTS: {
+        LIST: 'products/products/',
+        DETAIL: (id) => `products/products/${id}/`,
+        CATEGORIES: 'products/categories/',
+        STOCK_MOVEMENTS: 'products/stock-movements/',
     },
 };
 
