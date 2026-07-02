@@ -1,4 +1,4 @@
-﻿const ENDPOINTS = {
+const ENDPOINTS = {
     AUTH: {
         LOGIN: 'accounts/auth/login/',
         LOGOUT: 'accounts/auth/logout/',
@@ -19,6 +19,16 @@
     },
     CONFIG: {
         PUBLIC_COMPANY: 'config/public/company/',
+        COMPANY_CONFIGS: 'config/company-configs/',
+        COMPANY_CONFIG_DETAIL: (id) => `config/company-configs/${id}/`,
+    },
+    WORKING_HOURS: {
+        LIST: 'config/working-hours/',
+        DETAIL: (id) => `config/working-hours/${id}/`,
+    },
+    HOLIDAYS: {
+        LIST: 'config/holiday-exceptions/',
+        DETAIL: (id) => `config/holiday-exceptions/${id}/`,
     },
     TECHNICIAN: {
         ME: 'technicians/me/',
@@ -63,6 +73,16 @@
         DETAIL: (id) => `products/products/${id}/`,
         CATEGORIES: 'products/categories/',
         STOCK_MOVEMENTS: 'products/stock-movements/',
+    },
+    REPORTS: {
+        DASHBOARD: 'reports/dashboard/',
+        GENERAL: 'reports/general/',
+        TECHNICIAN: 'reports/technician/',
+        MY_PERFORMANCE: 'reports/my-performance/',
+        OVERDUE_RECEIVABLES: 'reports/overdue-receivables/',
+        TECHNICIAN_DETAIL: (id) => `reports/technician/${id}/`,
+        GENERAL_PDF: 'reports/general/',
+        TECHNICIAN_PDF: 'reports/technician/',
     },
 };
 

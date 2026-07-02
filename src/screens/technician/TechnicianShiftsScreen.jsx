@@ -17,6 +17,7 @@ import { useTheme } from '@/context/ThemeContext';
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
+import TechnicianPickerSheet from '@/components/home/TechnicianPickerSheet';
 
 const MONTHS_TR = [
     'Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran',
@@ -74,6 +75,30 @@ const STATE_META = {
     break: { label: 'Molada', color: serviceOrange, icon: 'coffee-outline', softColor: '#F59E0B' },
     completed: { label: 'Tamamlandi', color: serviceBlue, icon: 'check-decagram-outline', softColor: '#3B82F6' },
     unknown: { label: 'Bilinmiyor', color: '#9CA3AF', icon: 'help-circle-outline', softColor: '#9CA3AF' },
+};
+
+const getTechnicianName = (item) => item?.full_name || item?.user?.full_name || `${item?.user?.first_name || ''} ${item?.user?.last_name || ''}`.trim() || 'Teknisyen';
+
+const getTechnicianInitials = (item) => {
+    const name = getTechnicianName(item);
+    return String(name)
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+};
+
+const getShiftDurationMinutes = (shift) => {
+    const rawDuration = Number(shift?.duration_minutes);
+    if (Number.isFinite(rawDuration) && rawDuration > 0) return rawDuration;
+
+    const start = shift?.start_time ? new Date(shift.start_time) : null;
+    const end = shift?.end_time ? new Date(shift.end_time) : null;
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
 };
 
 const ShiftCard = ({ shift, onStop, index = 0 }) => {
@@ -159,7 +184,7 @@ const ShiftCard = ({ shift, onStop, index = 0 }) => {
                 <View style={styles.durationBlock}>
                     <Text style={[styles.timeLabel, { color: colors.textTertiary }]}>SURE</Text>
                     <Text style={[styles.durationValue, { color: meta.color }]}>
-                        {state === 'active' ? 'Devam ediyor...' : state === 'break' ? 'Molada' : formatDuration(shift.duration_minutes)}
+                        {state === 'active' ? 'Devam ediyor...' : state === 'break' ? 'Molada' : formatDuration(getShiftDurationMinutes(shift))}
                     </Text>
                 </View>
             </View>
@@ -199,10 +224,14 @@ const SummaryStat = ({ icon, value, label, color, isLast }) => {
 };
 
 export default function TechnicianShiftsScreen({ navigation, route }) {
-    const { technicianId } = route.params || {};
+    const { technicianId, technicianName } = route.params || {};
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useTheme();
 
+    const technicianSheetRef = useRef(null);
+    const [technicians, setTechnicians] = useState([]);
+    const [technicianListLoading, setTechnicianListLoading] = useState(false);
+    const [selectedTechnicianId, setSelectedTechnicianId] = useState(technicianId || null);
     const [shifts, setShifts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -213,15 +242,55 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
     });
     const initialFetchRef = useRef(true);
 
+    const selectedTechnician = technicians.find((item) => String(item?.id) === String(selectedTechnicianId)) || null;
+    const selectedTechnicianLabel = selectedTechnician
+        ? getTechnicianName(selectedTechnician)
+        : technicianName || 'Teknisyen secin';
+
+    const fetchTechnicians = useCallback(async () => {
+        try {
+            setTechnicianListLoading(true);
+            const response = await api.get(ENDPOINTS.TECHNICIAN.LIST, {
+                params: { include_inactive: true },
+            });
+            const rows = (Array.isArray(response?.data) ? response.data : []).slice().sort((a, b) =>
+                getTechnicianName(a).localeCompare(getTechnicianName(b), 'tr', { sensitivity: 'base' })
+            );
+            setTechnicians(rows);
+
+            if (!technicianId && !selectedTechnicianId && rows.length > 0) {
+                setSelectedTechnicianId(rows[0]?.id || null);
+            }
+        } catch (error) {
+            console.log('Technician list fetch error:', error?.response?.data || error?.message || error);
+            setTechnicians([]);
+        } finally {
+            setTechnicianListLoading(false);
+        }
+    }, [technicianId]);
+
     const fetchShifts = useCallback(async ({ isRefresh = false, isMonthChange = false } = {}) => {
+        const effectiveTechnicianId = selectedTechnicianId || technicianId;
+
+        if (!effectiveTechnicianId) {
+            setShifts([]);
+            setLoading(false);
+            setRefreshing(false);
+            setMonthLoading(false);
+            initialFetchRef.current = false;
+            return;
+        }
+
         try {
             if (isMonthChange) setMonthLoading(true);
 
-            const params = { month: currentMonth };
-            if (technicianId) params.technician = technicianId;
+            const params = {
+                month: currentMonth,
+                technician: effectiveTechnicianId,
+            };
 
             const response = await api.get(ENDPOINTS.TECHNICIAN.SHIFTS, { params });
-            setShifts(response.data || []);
+            setShifts(Array.isArray(response?.data) ? response.data : []);
         } catch (error) {
             console.log('Shifts fetch error:', error?.response?.data || error?.message || error);
             Alert.alert('Hata', 'Mesai kayitlari yuklenemedi');
@@ -231,7 +300,11 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
             setMonthLoading(false);
             initialFetchRef.current = false;
         }
-    }, [currentMonth, technicianId]);
+    }, [currentMonth, selectedTechnicianId, technicianId]);
+
+    useEffect(() => {
+        fetchTechnicians();
+    }, [fetchTechnicians]);
 
     useEffect(() => {
         // Ilk yukleme: sadece 'loading' goster; sonraki ay degisimlerinde 'monthLoading' goster
@@ -293,9 +366,55 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
     });
     const completedShifts = shifts.filter((s) => getShiftState(s) === 'completed');
     // Duzeltme: toplam sureyi dakika cinsinden hesapla, sonra formatla
-    const totalMinutes = completedShifts.reduce((sum, s) => sum + (Number(s.duration_minutes) || 0), 0);
+    const totalMinutes = completedShifts.reduce((sum, s) => sum + getShiftDurationMinutes(s), 0);
     const totalDurationLabel = formatDuration(totalMinutes);
     const completedCount = completedShifts.length;
+
+    const renderTechnicianFilter = () => (
+        <View style={[styles.filterCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.filterHeader}>
+                <Text style={[styles.filterTitle, { color: colors.text }]}>Teknisyen</Text>
+                <Text style={[styles.filterSubtitle, { color: colors.textSecondary }]}>Mesailer secili teknisyene gore listelenir</Text>
+            </View>
+
+            <Pressable
+                onPress={() => !technicianListLoading && technicianSheetRef.current?.present()}
+                style={({ pressed }) => [
+                    styles.selectorButton,
+                    {
+                        backgroundColor: colors.surfaceMuted,
+                        borderColor: colors.border,
+                        opacity: pressed ? 0.82 : 1,
+                    },
+                ]}
+            >
+                <View style={[styles.selectorAvatar, { backgroundColor: selectedTechnicianId ? `${serviceGreen}18` : `${serviceBlue}14` }]}>
+                    <Text style={[styles.selectorAvatarText, { color: selectedTechnicianId ? serviceGreen : serviceBlue }]}>
+                        {selectedTechnician ? getTechnicianInitials(selectedTechnician) : '??'}
+                    </Text>
+                </View>
+                <View style={styles.selectorTextWrap}>
+                    <Text style={[styles.selectorTitle, { color: colors.text }]} numberOfLines={1}>
+                        {selectedTechnicianLabel}
+                    </Text>
+                    <Text style={[styles.selectorSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {technicianListLoading
+                            ? 'Teknisyenler yukleniyor...'
+                            : selectedTechnician?.status_display || 'Teknisyen secmek icin dokunun'}
+                    </Text>
+                </View>
+                {technicianListLoading ? (
+                    <ActivityIndicator size="small" color={serviceBlue} />
+                ) : (
+                    <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textSecondary} />
+                )}
+            </Pressable>
+
+            {!technicianListLoading && technicians.length === 0 ? (
+                <Text style={[styles.filterEmptyText, { color: colors.textSecondary }]}>Listelenecek teknisyen bulunamadi.</Text>
+            ) : null}
+        </View>
+    );
 
     const renderHeader = () => (
         <View style={styles.monthNav}>
@@ -358,7 +477,7 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
             <SummaryStat
                 icon="clock-outline"
                 value={totalDurationLabel}
-                label="Toplam Süre"
+                label="Toplam Sure"
                 color={serviceOrange}
                 isLast
             />
@@ -414,7 +533,7 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
                 <View style={styles.headerTitleBlock}>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>Mesailer</Text>
                     <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-                        Aylik mesai ozetiniz
+                        {selectedTechnicianLabel}
                     </Text>
                 </View>
                 <Pressable
@@ -443,6 +562,7 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
                 keyExtractor={(item) => String(item.id)}
                 ListHeaderComponent={() => (
                     <View>
+                        {renderTechnicianFilter()}
                         {renderHeader()}
                         {renderSummary()}
                         {activeShifts.length > 0 && (
@@ -511,9 +631,11 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
                                     : 'Bu ay icin mesai kaydi yok'}
                             </Text>
                             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                                {hasAny
-                                    ? 'Aktif mesailer yukarida listeleniyor. Tamamlanan mesai kaydi bulunmuyor.'
-                                    : 'Secili ay icerisinde henuz tamamlanmis ya da aktif mesai bulunmuyor.'}
+                                {!selectedTechnicianId
+                                    ? 'Mesai kayitlarini gormek icin once bir teknisyen secin.'
+                                    : hasAny
+                                        ? 'Aktif mesailer yukarida listeleniyor. Tamamlanan mesai kaydi bulunmuyor.'
+                                        : 'Secili teknisyen icin bu ay mesai kaydi bulunmuyor.'}
                             </Text>
                         </View>
                     );
@@ -531,6 +653,18 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
                     </View>
                 </View>
             )}
+
+            <TechnicianPickerSheet
+                ref={technicianSheetRef}
+                technicians={technicians}
+                loading={technicianListLoading}
+                includeUnassigned={false}
+                selectedTechnicianId={selectedTechnicianId}
+                onSelect={(item) => {
+                    setSelectedTechnicianId(item?.id || null);
+                    technicianSheetRef.current?.dismiss();
+                }}
+            />
         </View>
     );
 }
@@ -558,6 +692,77 @@ const styles = StyleSheet.create({
     loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
     loadingText: { fontSize: 13, fontWeight: '600' },
     listContent: { paddingHorizontal: 16, paddingTop: 4 },
+    filterCard: {
+        borderWidth: 1,
+        borderRadius: 18,
+        paddingVertical: 12,
+        marginBottom: 12,
+    },
+    filterHeader: {
+        paddingHorizontal: 12,
+        marginBottom: 10,
+        gap: 2,
+    },
+    filterTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+    },
+    filterSubtitle: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    filterLoadingWrap: {
+        minHeight: 56,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+    },
+    filterLoadingText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    selectorButton: {
+        minHeight: 66,
+        marginHorizontal: 12,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    selectorAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    selectorAvatarText: {
+        fontSize: 13,
+        fontWeight: '900',
+    },
+    selectorTextWrap: {
+        flex: 1,
+    },
+    selectorTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    selectorSubtitle: {
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: 2,
+    },
+    filterEmptyText: {
+        fontSize: 12,
+        fontWeight: '600',
+        paddingHorizontal: 12,
+        paddingBottom: 4,
+    },
 
     // Month nav
     monthNav: {

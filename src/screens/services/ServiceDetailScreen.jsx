@@ -156,6 +156,8 @@ const ServiceDetailScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(!seedService && Boolean(serviceId));
     const [error, setError] = useState(null);
 
+    const warrantySheetRef = useRef(null);
+
     const statusColor = useMemo(
         () => service?.status_color || colors.primary,
         [service?.status_color, colors.primary]

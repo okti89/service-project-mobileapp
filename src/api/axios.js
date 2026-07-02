@@ -4,7 +4,7 @@ import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const api = axios.create({
-    baseURL: 'http://192.168.1.19:8000/api',
+    baseURL: 'http://192.168.1.4:8000/api',
     timeout: 10000,
 });
 

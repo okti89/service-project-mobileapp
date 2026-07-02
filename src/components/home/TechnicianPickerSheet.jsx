@@ -34,6 +34,7 @@ const TechnicianPickerSheet = forwardRef(({
     loading = false,
     submitting = false,
     selectedTechnicianId = null,
+    includeUnassigned = true,
     onSelect,
 }, ref) => {
     const { colors, isDark } = useTheme();

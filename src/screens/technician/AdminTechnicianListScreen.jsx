@@ -485,7 +485,10 @@ export default function AdminTechnicianListScreen({ navigation }) {
                 );
             });
         }
-        return list;
+
+        return list.slice().sort((a, b) =>
+            getFullName(a).localeCompare(getFullName(b), 'tr', { sensitivity: 'base' })
+        );
     }, [technicians, activeFilter, search]);
 
     const openCreateForm = () => {
