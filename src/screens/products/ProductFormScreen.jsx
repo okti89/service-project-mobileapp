@@ -99,7 +99,6 @@ export default function ProductFormScreen({ navigation, route }) {
     };
 
     const handleSelectImage = async (source) => {
-        setImageSourceModalVisible(false);
         const hasPermission = await requestPermissions();
         if (!hasPermission) {
             Alert.alert('Yetki Gerekli', 'Kamera ve galeri izinlerini onaylamanız gerekmektedir.');
@@ -234,15 +233,18 @@ export default function ProductFormScreen({ navigation, route }) {
     const selectedCategoryName = categories.find(c => c.id === form.category_id)?.name || 'Kategori Seçilmedi';
 
     return (
-        <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+        <View style={[styles.screen, { backgroundColor: colors.backgroundSecondary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8, alignItems: 'center' }]}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
                 </Pressable>
                 <View style={styles.headerTitleWrap}>
-                    <Text style={[styles.headerTitleText, { color: colors.text }]}>
+                    <Text style={[styles.headerTitleText, { color: colors.text }]} numberOfLines={1}>
                         {isEdit ? 'Ürünü Düzenle' : 'Yeni Ürün'}
+                    </Text>
+                    <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]} numberOfLines={1}>
+                        {isEdit ? 'Ürün bilgilerini güncelle' : 'Envantere yeni ürün ekle'}
                     </Text>
                 </View>
                 <Pressable onPress={handleSave} disabled={saving} style={styles.backBtn}>
@@ -358,7 +360,7 @@ export default function ProductFormScreen({ navigation, route }) {
                             multiline
                             numberOfLines={3}
                             inputContainerStyle={{ height: 90, alignItems: 'flex-start', paddingTop: 8 }}
-                            style={{ textAlignVertical: 'top', height: 80, color: '#0F172A' }}
+                            style={{ textAlignVertical: 'top', height: 80, color: colors.text }}
                             disableSmartFormat={true}
                         />
                     </View>
@@ -481,10 +483,11 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
     },
     backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    headerTitleWrap: { flex: 1, alignItems: 'center' },
-    headerTitleText: { fontSize: 18, fontWeight: '800' },
+    headerTitleWrap: { flex: 1, alignItems: 'center', minWidth: 0 },
+    headerTitleText: { fontSize: 18, fontWeight: '900' },
+    headerSubtitle: { fontSize: 11, fontWeight: '700', marginTop: 2 },
     body: { flex: 1 },
-    bodyContent: { paddingHorizontal: 16, paddingTop: 8 },
+    bodyContent: { paddingHorizontal: 16, paddingTop: 8, gap: 14 },
     imageUploadArea: {
         height: 180,
         borderRadius: 16,
@@ -492,7 +495,7 @@ const styles = StyleSheet.create({
         borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16,
+        marginBottom: 0,
         overflow: 'hidden',
     },
     previewContainer: { width: '100%', height: '100%' },
@@ -502,7 +505,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         height: 48,
         flexDirection: 'row',
         alignItems: 'center',
@@ -521,7 +524,7 @@ const styles = StyleSheet.create({
     },
     uploadTitle: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
     uploadDesc: { fontSize: 11, fontWeight: '600' },
-    formCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 4 },
+    formCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 0 },
     selectorLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, marginBottom: 7, marginLeft: 2 },
     selectorBtn: {
         flexDirection: 'row',
@@ -533,9 +536,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         marginBottom: 14,
     },
-    selectorBtnText: { fontSize: 14, fontWeight: '600' },
+    selectorBtnText: { flex: 1, fontSize: 14, fontWeight: '700' },
     errorText: { fontSize: 12, color: serviceRed, fontWeight: '600', marginTop: -10, marginBottom: 12, marginLeft: 2 },
-    actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
+    actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 },
     saveBtn: {
         flex: 1,
         flexDirection: 'row',
@@ -561,7 +564,7 @@ const styles = StyleSheet.create({
     // Modal & Source selectors
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         justifyContent: 'flex-end',
     },
     modalContent: {

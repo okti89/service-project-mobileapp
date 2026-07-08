@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -24,6 +24,13 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 
 dayjs.locale('tr');
+
+const toNumber = (value) => {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCurrency = (value) => `₺${toNumber(value).toLocaleString('tr-TR')}`;
 
 export default function ProductListScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -85,28 +92,45 @@ export default function ProductListScreen({ navigation }) {
         }
     };
 
-    // Calculations
-    const totalProducts = products.length;
-    const lowStockCount = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= 5).length;
-    const outOfStockCount = products.filter(p => p.stock_quantity === 0).length;
-    const totalValue = products.reduce((sum, p) => sum + (Number(p.price || 0) * Number(p.stock_quantity || 0)), 0);
+    const inventorySummary = useMemo(() => {
+        const totalStock = products.reduce((sum, p) => sum + toNumber(p.stock_quantity), 0);
+        const lowStockCount = products.filter(p => {
+            const quantity = toNumber(p.stock_quantity);
+            return quantity > 0 && quantity <= 5;
+        }).length;
+        const outOfStockCount = products.filter(p => toNumber(p.stock_quantity) === 0).length;
+        const totalValue = products.reduce((sum, p) => sum + (toNumber(p.price) * toNumber(p.stock_quantity)), 0);
 
-    // Filtering
-    const filtered = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.code.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = !selectedCategory || p.category_detail?.id === selectedCategory;
-        return matchesSearch && matchesCategory;
-    });
+        return {
+            totalProducts: products.length,
+            totalStock,
+            lowStockCount,
+            outOfStockCount,
+            totalValue,
+        };
+    }, [products]);
+
+    const filtered = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        return products.filter(p => {
+            const name = String(p.name || '').toLowerCase();
+            const code = String(p.code || '').toLowerCase();
+            const matchesSearch = !normalizedQuery || name.includes(normalizedQuery) || code.includes(normalizedQuery);
+            const matchesCategory = !selectedCategory || p.category_detail?.id === selectedCategory;
+            return matchesSearch && matchesCategory;
+        });
+    }, [products, searchQuery, selectedCategory]);
 
     const getStatusConfig = (quantity) => {
-        if (quantity === 0) return { label: 'Tükendi', color: serviceRed, bg: 'rgba(220, 38, 38, 0.08)' };
-        if (quantity <= 5) return { label: 'Düşük', color: serviceOrange, bg: 'rgba(245, 158, 11, 0.08)' };
+        const stock = toNumber(quantity);
+        if (stock === 0) return { label: 'Tükendi', color: serviceRed, bg: 'rgba(220, 38, 38, 0.08)' };
+        if (stock <= 5) return { label: 'Düşük', color: serviceOrange, bg: 'rgba(245, 158, 11, 0.08)' };
         return { label: 'Yeterli', color: serviceGreen, bg: 'rgba(34, 197, 94, 0.08)' };
     };
 
     return (
-        <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+        <View style={[styles.screen, { backgroundColor: colors.backgroundSecondary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8, alignItems: 'center' }]}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -145,6 +169,29 @@ export default function ProductListScreen({ navigation }) {
                         }
                         ListHeaderComponent={
                             <>
+                                <View style={[styles.inventoryHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                                    <View style={styles.inventoryHeroIcon}>
+                                        <MaterialCommunityIcons name="warehouse" size={22} color="#FFFFFF" />
+                                    </View>
+                                    <View style={styles.inventoryHeroText}>
+                                        <Text style={[styles.inventoryHeroLabel, { color: colors.textSecondary }]}>Envanter sağlığı</Text>
+                                        <Text style={[styles.inventoryHeroTitle, { color: colors.text }]} numberOfLines={1}>
+                                            {inventorySummary.totalStock.toLocaleString('tr-TR')} stokta ürün
+                                        </Text>
+                                    </View>
+                                    <Pressable
+                                        onPress={() => fetchStockMovements()}
+                                        style={({ pressed }) => [
+                                            styles.heroAction,
+                                            { backgroundColor: `${serviceBlue}10`, borderColor: `${serviceBlue}28` },
+                                            pressed && styles.btnPressed
+                                        ]}
+                                    >
+                                        <MaterialCommunityIcons name="swap-vertical" size={16} color={serviceBlue} />
+                                        <Text style={[styles.heroActionText, { color: serviceBlue }]}>Hareketler</Text>
+                                    </Pressable>
+                                </View>
+
                                 {/* Stats Cards Grid */}
                                 <View style={styles.statsGrid}>
                                     {/* Stat Card: Total Products */}
@@ -153,7 +200,7 @@ export default function ProductListScreen({ navigation }) {
                                             <MaterialCommunityIcons name="package-variant" size={18} color={serviceBlue} />
                                         </View>
                                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Ürün</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{totalProducts}</Text>
+                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.totalProducts}</Text>
                                     </View>
 
                                     {/* Stat Card: Low Stock */}
@@ -162,7 +209,7 @@ export default function ProductListScreen({ navigation }) {
                                             <MaterialCommunityIcons name="alert-outline" size={18} color={serviceOrange} />
                                         </View>
                                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Düşük Stok</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{lowStockCount}</Text>
+                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.lowStockCount}</Text>
                                     </View>
 
                                     {/* Stat Card: Out of Stock */}
@@ -171,7 +218,7 @@ export default function ProductListScreen({ navigation }) {
                                             <MaterialCommunityIcons name="close-circle-outline" size={18} color={serviceRed} />
                                         </View>
                                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Tükendi</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{outOfStockCount}</Text>
+                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.outOfStockCount}</Text>
                                     </View>
 
                                     {/* Stat Card: Total Value */}
@@ -181,12 +228,12 @@ export default function ProductListScreen({ navigation }) {
                                         </View>
                                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Değer</Text>
                                         <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
-                                            ₺{totalValue.toLocaleString('tr-TR')}
+                                            {formatCurrency(inventorySummary.totalValue)}
                                         </Text>
                                     </View>
                                 </View>
 
-                                 {/* Category Selection Chips */}
+                                {/* Category Selection Chips */}
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
@@ -234,7 +281,8 @@ export default function ProductListScreen({ navigation }) {
                             </>
                         }
                         renderItem={({ item }) => {
-                            const statusConfig = getStatusConfig(item.stock_quantity);
+                            const stockQuantity = toNumber(item.stock_quantity);
+                            const statusConfig = getStatusConfig(stockQuantity);
                             return (
                                 <Pressable
                                     onPress={() => navigation.navigate('AdminProductForm', { product: item })}
@@ -251,27 +299,27 @@ export default function ProductListScreen({ navigation }) {
 
                                     {/* Details */}
                                     <View style={styles.productDetails}>
-                                        <Text style={[styles.productNameText, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={[styles.productNameText, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
                                         <View style={styles.badgeRow}>
                                             <Text style={[styles.catText, { color: colors.textSecondary }]} numberOfLines={1}>
                                                 {item.category_detail?.name || 'Kategorisiz'}
                                             </Text>
                                             <Text style={[styles.dotSeparator, { color: colors.textTertiary }]}>•</Text>
-                                            <Text style={[styles.skuText, { color: colors.textTertiary }]}>SKU: {item.code}</Text>
+                                            <Text style={[styles.skuText, { color: colors.textTertiary }]} numberOfLines={1}>SKU: {item.code || '-'}</Text>
                                         </View>
 
                                         {/* Stats Row */}
                                         <View style={styles.productStatsRow}>
                                             <View style={styles.productStatCol}>
                                                 <MaterialCommunityIcons name="cube-outline" size={13} color={colors.textTertiary} style={{ marginRight: 4 }} />
-                                                <Text style={[styles.productStatVal, { color: item.stock_quantity === 0 ? serviceRed : colors.text }]}>
-                                                    {item.stock_quantity} adet
+                                                <Text style={[styles.productStatVal, { color: stockQuantity === 0 ? serviceRed : colors.text }]}>
+                                                    {stockQuantity} adet
                                                 </Text>
                                             </View>
                                             <View style={[styles.productStatCol, { marginLeft: 16 }]}>
                                                 <MaterialCommunityIcons name="tag-outline" size={13} color={colors.textTertiary} style={{ marginRight: 4 }} />
                                                 <Text style={[styles.productStatVal, { color: serviceBlue, fontWeight: '800' }]}>
-                                                    ₺{Number(item.price).toLocaleString('tr-TR')}
+                                                    {formatCurrency(item.price)}
                                                 </Text>
                                             </View>
                                         </View>
@@ -432,17 +480,60 @@ const styles = StyleSheet.create({
     statsScroll: {
         marginBottom: 16,
     },
+    inventoryHero: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 14,
+        marginBottom: 12,
+        gap: 12,
+    },
+    inventoryHeroIcon: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: serviceBlue,
+    },
+    inventoryHeroText: {
+        flex: 1,
+        minWidth: 0,
+    },
+    inventoryHeroLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    inventoryHeroTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    heroAction: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    heroActionText: {
+        fontSize: 11,
+        fontWeight: '900',
+    },
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 16,
+        gap: 10,
+        marginBottom: 14,
     },
     statCard: {
-        width: '48%',
+        flexBasis: '48%',
         flexGrow: 1,
-        minWidth: '45%',
-        borderRadius: 16,
+        minWidth: 150,
+        borderRadius: 14,
         borderWidth: 1,
         padding: 12,
     },
@@ -475,8 +566,8 @@ const styles = StyleSheet.create({
     categoryChip: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 0,
-        borderWidth: 1.5,
+        borderRadius: 999,
+        borderWidth: 1,
     },
     categoryChipText: {
         fontSize: 12,
@@ -498,8 +589,8 @@ const styles = StyleSheet.create({
     },
     productCard: {
         flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 16,
+        alignItems: 'flex-start',
+        borderRadius: 14,
         borderWidth: 1,
         padding: 14,
         marginBottom: 10,
@@ -507,7 +598,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.04,
         shadowRadius: 8,
-        elevation: 2,
+        elevation: 1,
     },
     imageWrap: {
         width: 64,
@@ -524,6 +615,7 @@ const styles = StyleSheet.create({
     },
     productDetails: {
         flex: 1,
+        minWidth: 0,
         marginLeft: 12,
     },
     productNameText: {
@@ -535,9 +627,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        minWidth: 0,
         marginBottom: 6,
     },
     catText: {
+        flexShrink: 1,
         fontSize: 11,
         fontWeight: '700',
     },
@@ -546,12 +640,15 @@ const styles = StyleSheet.create({
         marginHorizontal: 2,
     },
     skuText: {
+        flexShrink: 1,
         fontSize: 10,
         fontWeight: '600',
     },
     productStatsRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        rowGap: 4,
     },
     productStatCol: {
         flexDirection: 'row',
@@ -569,7 +666,7 @@ const styles = StyleSheet.create({
     productCardRight: {
         alignItems: 'flex-end',
         justifyContent: 'space-between',
-        height: 60,
+        minHeight: 60,
     },
     statusBadge: {
         paddingHorizontal: 8,
@@ -592,7 +689,7 @@ const styles = StyleSheet.create({
         marginTop: 6,
     },
     historyBtnText: {
-        fontSize: 9.5,
+        fontSize: 9,
         fontWeight: '800',
     },
     emptyContainer: {
@@ -629,7 +726,8 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        height: '75%',
+        maxHeight: '78%',
+        minHeight: '48%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         overflow: 'hidden',
@@ -642,6 +740,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
     },
     modalTitle: {
+        flex: 1,
         fontSize: 16,
         fontWeight: '900',
     },
