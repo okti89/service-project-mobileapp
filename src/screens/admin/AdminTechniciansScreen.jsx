@@ -408,9 +408,18 @@ export default function AdminTechniciansScreen() {
     }), [restoreUser]);
 
     const handleNavigate = useCallback((action, tech) => {
-        // TODO: navigasyon eklenecek
-        console.log('navigate:', action, tech?.id);
-    }, []);
+        if (action === 'view' || action === 'detail') {
+            navigation.navigate('AdminTechnicianDetail', { technicianId: tech.id });
+        } else if (action === 'locations') {
+            navigation.navigate('TechnicianLocations', { technicianId: tech.id });
+        } else if (action === 'shifts') {
+            navigation.navigate('TechnicianShifts', { technicianId: tech.id });
+        } else if (action === 'leave') {
+            navigation.navigate('AdminTechnicianLeaves', { technicianId: tech.id });
+        } else {
+            console.log('navigate:', action, tech?.id);
+        }
+    }, [navigation]);
 
     const handleWhatsApp = useCallback((tech) => {
         const phone = String(tech?.user?.phone_number || '').replace(/[^\d+]/g, '');
