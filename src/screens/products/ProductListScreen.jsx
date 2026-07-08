@@ -4,14 +4,14 @@ import {
     Alert,
     FlatList,
     Image,
+    Modal,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
-    Modal,
-    RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +31,7 @@ const toNumber = (value) => {
 };
 
 const formatCurrency = (value) => `₺${toNumber(value).toLocaleString('tr-TR')}`;
+const formatCount = (value) => toNumber(value).toLocaleString('tr-TR');
 
 export default function ProductListScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -41,7 +42,6 @@ export default function ProductListScreen({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
-    // Stock Movements Modal
     const [movementsModalVisible, setMovementsModalVisible] = useState(false);
     const [movements, setMovements] = useState([]);
     const [movementsLoading, setMovementsLoading] = useState(false);
@@ -81,7 +81,7 @@ export default function ProductListScreen({ navigation }) {
             setSelectedProductForMovements(productName);
             setMovementsModalVisible(true);
             const response = await api.get(ENDPOINTS.PRODUCTS.STOCK_MOVEMENTS, {
-                params: productId ? { product: productId } : undefined
+                params: productId ? { product: productId } : undefined,
             });
             setMovements(Array.isArray(response?.data) ? response.data : []);
         } catch (error) {
@@ -124,32 +124,183 @@ export default function ProductListScreen({ navigation }) {
 
     const getStatusConfig = (quantity) => {
         const stock = toNumber(quantity);
-        if (stock === 0) return { label: 'Tükendi', color: serviceRed, bg: 'rgba(220, 38, 38, 0.08)' };
-        if (stock <= 5) return { label: 'Düşük', color: serviceOrange, bg: 'rgba(245, 158, 11, 0.08)' };
-        return { label: 'Yeterli', color: serviceGreen, bg: 'rgba(34, 197, 94, 0.08)' };
+        if (stock === 0) return { label: 'Tükendi', color: serviceRed, bg: 'rgba(220, 53, 69, 0.10)' };
+        if (stock <= 5) return { label: 'Düşük', color: serviceOrange, bg: 'rgba(255, 140, 0, 0.12)' };
+        return { label: 'Yeterli', color: serviceGreen, bg: 'rgba(0, 163, 108, 0.12)' };
     };
+
+    const renderProduct = ({ item }) => {
+        const stockQuantity = toNumber(item.stock_quantity);
+        const statusConfig = getStatusConfig(stockQuantity);
+
+        return (
+            <Pressable
+                onPress={() => navigation.navigate('AdminProductForm', { product: item })}
+                style={({ pressed }) => [
+                    styles.productCard,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    pressed && styles.btnPressed,
+                ]}
+            >
+                <View style={[styles.imageWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F3F6FA' }]}>
+                    {item.image ? (
+                        <Image source={{ uri: item.image }} style={styles.productImage} />
+                    ) : (
+                        <MaterialCommunityIcons name="package-variant" size={26} color={colors.textTertiary} />
+                    )}
+                </View>
+
+                <View style={styles.productInfo}>
+                    <View style={styles.productTopRow}>
+                        <View style={styles.productTitleArea}>
+                            <Text style={[styles.productNameText, { color: colors.text }]} numberOfLines={1}>
+                                {item.name || 'Ürün'}
+                            </Text>
+                            <View style={styles.metaRow}>
+                                <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                    {item.category_detail?.name || 'Kategorisiz'}
+                                </Text>
+                                <Text style={[styles.metaDot, { color: colors.textTertiary }]}>•</Text>
+                                <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                    SKU: {item.code || '-'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+                            <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.productBottomRow}>
+                        <View style={styles.productMetric}>
+                            <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Stok</Text>
+                            <Text style={[styles.metricValue, { color: stockQuantity === 0 ? serviceRed : colors.text }]}>
+                                {formatCount(stockQuantity)}
+                            </Text>
+                        </View>
+                        <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.productMetric}>
+                            <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Fiyat</Text>
+                            <Text style={[styles.metricValue, { color: colors.text }]}>{formatCurrency(item.price)}</Text>
+                        </View>
+                        <Pressable
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                fetchStockMovements(item.id, item.name);
+                            }}
+                            hitSlop={10}
+                            style={styles.historyIconBtn}
+                        >
+                            <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                </View>
+            </Pressable>
+        );
+    };
+
+    const ListHeader = (
+        <>
+            <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.summaryTopRow}>
+                    <View style={styles.summaryMainMetric}>
+                        <View style={[styles.summaryIcon, { backgroundColor: `${serviceBlue}12` }]}>
+                            <MaterialCommunityIcons name="package-variant-closed" size={22} color={serviceBlue} />
+                        </View>
+                        <View>
+                            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Toplam Ürün</Text>
+                            <Text style={[styles.summaryValue, { color: colors.text }]}>{formatCount(inventorySummary.totalProducts)}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.summaryMainMetricRight}>
+                        <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Toplam Değer</Text>
+                        <Text style={[styles.summaryValueSmall, { color: colors.text }]} numberOfLines={1}>
+                            {formatCurrency(inventorySummary.totalValue)}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+
+                <View style={styles.summaryMiniRow}>
+                    <View style={styles.summaryMiniItem}>
+                        <Text style={[styles.summaryMiniLabel, { color: colors.textTertiary }]}>Toplam Stok</Text>
+                        <Text style={[styles.summaryMiniValue, { color: colors.text }]}>{formatCount(inventorySummary.totalStock)} adet</Text>
+                    </View>
+                    <View style={styles.summaryMiniItem}>
+                        <Text style={[styles.summaryMiniLabel, { color: colors.textTertiary }]}>Düşük</Text>
+                        <Text style={[styles.summaryMiniValue, { color: serviceOrange }]}>{formatCount(inventorySummary.lowStockCount)}</Text>
+                    </View>
+                    <View style={styles.summaryMiniItem}>
+                        <Text style={[styles.summaryMiniLabel, { color: colors.textTertiary }]}>Tükendi</Text>
+                        <Text style={[styles.summaryMiniValue, { color: serviceRed }]}>{formatCount(inventorySummary.outOfStockCount)}</Text>
+                    </View>
+                </View>
+            </View>
+
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+                contentContainerStyle={styles.categoryScrollContent}
+            >
+                <Pressable
+                    onPress={() => setSelectedCategory(null)}
+                    style={[
+                        styles.categoryChip,
+                        { backgroundColor: !selectedCategory ? serviceBlue : colors.surface, borderColor: !selectedCategory ? serviceBlue : colors.border },
+                    ]}
+                >
+                    <Text style={[styles.categoryChipText, { color: !selectedCategory ? '#FFFFFF' : colors.text }]}>Tümü</Text>
+                </Pressable>
+                {categories.map((c) => {
+                    const active = selectedCategory === c.id;
+                    return (
+                        <Pressable
+                            key={c.id}
+                            onPress={() => setSelectedCategory(c.id)}
+                            style={[
+                                styles.categoryChip,
+                                { backgroundColor: active ? serviceBlue : colors.surface, borderColor: active ? serviceBlue : colors.border },
+                            ]}
+                        >
+                            <Text style={[styles.categoryChipText, { color: active ? '#FFFFFF' : colors.text }]} numberOfLines={1}>{c.name}</Text>
+                        </Pressable>
+                    );
+                })}
+            </ScrollView>
+
+            <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <MaterialCommunityIcons name="magnify" size={21} color={colors.textTertiary} style={{ marginRight: 10 }} />
+                <TextInput
+                    placeholder="Ürün veya SKU ara..."
+                    placeholderTextColor={colors.textTertiary}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    style={[styles.searchInput, { color: colors.text }]}
+                    clearButtonMode="while-editing"
+                />
+            </View>
+        </>
+    );
 
     return (
         <View style={[styles.screen, { backgroundColor: colors.backgroundSecondary }]}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 8, alignItems: 'center' }]}>
-                <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+            <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+                <Pressable onPress={() => navigation.goBack()} style={[styles.iconButton, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                    <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
                 </Pressable>
                 <View style={styles.headerTitleWrap}>
+                    <Text style={[styles.headerKicker, { color: colors.textSecondary }]}>Stok ve ürün yönetimi</Text>
                     <Text style={[styles.headerTitleText, { color: colors.text }]}>Ürün & Envanter</Text>
-                    <Text style={[styles.headerSubtitle, { color: colors.textTertiary }]}>Stok ve ürün yönetimi</Text>
                 </View>
                 <Pressable
                     onPress={() => navigation.navigate('AdminProductForm')}
-                    style={({ pressed }) => [
-                        styles.headerAddBtn,
-                        { backgroundColor: `${serviceBlue}12`, borderColor: `${serviceBlue}40` },
-                        pressed && styles.btnPressed
-                    ]}
+                    style={({ pressed }) => [styles.iconButton, { borderColor: `${serviceBlue}24`, backgroundColor: `${serviceBlue}10` }, pressed && styles.btnPressed]}
                 >
-                    <MaterialCommunityIcons name="plus" size={16} color={serviceBlue} />
-                    <Text style={[styles.headerAddBtnText, { color: serviceBlue }]}>Ürün Ekle</Text>
+                    <MaterialCommunityIcons name="plus" size={23} color={serviceBlue} />
                 </Pressable>
             </View>
 
@@ -158,206 +309,23 @@ export default function ProductListScreen({ navigation }) {
                     <ActivityIndicator size="large" color={serviceBlue} />
                 </View>
             ) : (
-                <View style={{ flex: 1 }}>
-                    <FlatList
-                        data={filtered}
-                        keyExtractor={(item) => item.id.toString()}
-                        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 30 }]}
-                        showsVerticalScrollIndicator={false}
-                        refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[serviceBlue]} />
-                        }
-                        ListHeaderComponent={
-                            <>
-                                <View style={[styles.inventoryHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                    <View style={styles.inventoryHeroIcon}>
-                                        <MaterialCommunityIcons name="warehouse" size={22} color="#FFFFFF" />
-                                    </View>
-                                    <View style={styles.inventoryHeroText}>
-                                        <Text style={[styles.inventoryHeroLabel, { color: colors.textSecondary }]}>Envanter sağlığı</Text>
-                                        <Text style={[styles.inventoryHeroTitle, { color: colors.text }]} numberOfLines={1}>
-                                            {inventorySummary.totalStock.toLocaleString('tr-TR')} stokta ürün
-                                        </Text>
-                                    </View>
-                                    <Pressable
-                                        onPress={() => fetchStockMovements()}
-                                        style={({ pressed }) => [
-                                            styles.heroAction,
-                                            { backgroundColor: `${serviceBlue}10`, borderColor: `${serviceBlue}28` },
-                                            pressed && styles.btnPressed
-                                        ]}
-                                    >
-                                        <MaterialCommunityIcons name="swap-vertical" size={16} color={serviceBlue} />
-                                        <Text style={[styles.heroActionText, { color: serviceBlue }]}>Hareketler</Text>
-                                    </Pressable>
-                                </View>
-
-                                {/* Stats Cards Grid */}
-                                <View style={styles.statsGrid}>
-                                    {/* Stat Card: Total Products */}
-                                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                        <View style={[styles.statIconWrap, { backgroundColor: `${serviceBlue}10` }]}>
-                                            <MaterialCommunityIcons name="package-variant" size={18} color={serviceBlue} />
-                                        </View>
-                                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Ürün</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.totalProducts}</Text>
-                                    </View>
-
-                                    {/* Stat Card: Low Stock */}
-                                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                        <View style={[styles.statIconWrap, { backgroundColor: `${serviceOrange}10` }]}>
-                                            <MaterialCommunityIcons name="alert-outline" size={18} color={serviceOrange} />
-                                        </View>
-                                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Düşük Stok</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.lowStockCount}</Text>
-                                    </View>
-
-                                    {/* Stat Card: Out of Stock */}
-                                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                        <View style={[styles.statIconWrap, { backgroundColor: `${serviceRed}10` }]}>
-                                            <MaterialCommunityIcons name="close-circle-outline" size={18} color={serviceRed} />
-                                        </View>
-                                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Tükendi</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]}>{inventorySummary.outOfStockCount}</Text>
-                                    </View>
-
-                                    {/* Stat Card: Total Value */}
-                                    <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                        <View style={[styles.statIconWrap, { backgroundColor: `${serviceGreen}10` }]}>
-                                            <MaterialCommunityIcons name="currency-try" size={18} color={serviceGreen} />
-                                        </View>
-                                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Değer</Text>
-                                        <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
-                                            {formatCurrency(inventorySummary.totalValue)}
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                {/* Category Selection Chips */}
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.categoryScroll}
-                                    contentContainerStyle={styles.categoryScrollContent}
-                                >
-                                    <Pressable
-                                        onPress={() => setSelectedCategory(null)}
-                                        style={[
-                                            styles.categoryChip,
-                                            { backgroundColor: !selectedCategory ? serviceBlue : colors.surface, borderColor: !selectedCategory ? serviceBlue : colors.border }
-                                        ]}
-                                    >
-                                        <Text style={[styles.categoryChipText, { color: !selectedCategory ? '#FFFFFF' : colors.text }]}>Tümü</Text>
-                                    </Pressable>
-                                    {categories.map((c) => {
-                                        const active = selectedCategory === c.id;
-                                        return (
-                                            <Pressable
-                                                key={c.id}
-                                                onPress={() => setSelectedCategory(c.id)}
-                                                style={[
-                                                    styles.categoryChip,
-                                                    { backgroundColor: active ? serviceBlue : colors.surface, borderColor: active ? serviceBlue : colors.border }
-                                                ]}
-                                            >
-                                                <Text style={[styles.categoryChipText, { color: active ? '#FFFFFF' : colors.text }]}>{c.name}</Text>
-                                            </Pressable>
-                                        );
-                                    })}
-                                </ScrollView>
-
-                                {/* Search Input Container */}
-                                <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                                    <MaterialCommunityIcons name="magnify" size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
-                                    <TextInput
-                                        placeholder="Ürün veya SKU ara..."
-                                        placeholderTextColor={colors.textTertiary}
-                                        value={searchQuery}
-                                        onChangeText={setSearchQuery}
-                                        style={[styles.searchInput, { color: colors.text }]}
-                                        clearButtonMode="while-editing"
-                                    />
-                                </View>
-                            </>
-                        }
-                        renderItem={({ item }) => {
-                            const stockQuantity = toNumber(item.stock_quantity);
-                            const statusConfig = getStatusConfig(stockQuantity);
-                            return (
-                                <Pressable
-                                    onPress={() => navigation.navigate('AdminProductForm', { product: item })}
-                                    style={[styles.productCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                                >
-                                    {/* Product Image */}
-                                    <View style={[styles.imageWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#EEF2F6' }]}>
-                                        {item.image ? (
-                                            <Image source={{ uri: item.image }} style={styles.productImage} />
-                                        ) : (
-                                            <MaterialCommunityIcons name="image-outline" size={24} color={colors.textTertiary} />
-                                        )}
-                                    </View>
-
-                                    {/* Details */}
-                                    <View style={styles.productDetails}>
-                                        <Text style={[styles.productNameText, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
-                                        <View style={styles.badgeRow}>
-                                            <Text style={[styles.catText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                                {item.category_detail?.name || 'Kategorisiz'}
-                                            </Text>
-                                            <Text style={[styles.dotSeparator, { color: colors.textTertiary }]}>•</Text>
-                                            <Text style={[styles.skuText, { color: colors.textTertiary }]} numberOfLines={1}>SKU: {item.code || '-'}</Text>
-                                        </View>
-
-                                        {/* Stats Row */}
-                                        <View style={styles.productStatsRow}>
-                                            <View style={styles.productStatCol}>
-                                                <MaterialCommunityIcons name="cube-outline" size={13} color={colors.textTertiary} style={{ marginRight: 4 }} />
-                                                <Text style={[styles.productStatVal, { color: stockQuantity === 0 ? serviceRed : colors.text }]}>
-                                                    {stockQuantity} adet
-                                                </Text>
-                                            </View>
-                                            <View style={[styles.productStatCol, { marginLeft: 16 }]}>
-                                                <MaterialCommunityIcons name="tag-outline" size={13} color={colors.textTertiary} style={{ marginRight: 4 }} />
-                                                <Text style={[styles.productStatVal, { color: serviceBlue, fontWeight: '800' }]}>
-                                                    {formatCurrency(item.price)}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Right Action */}
-                                    <View style={styles.productCardRight}>
-                                        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-                                            <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
-                                        </View>
-                                        <Pressable
-                                            onPress={(e) => {
-                                                e.stopPropagation();
-                                                fetchStockMovements(item.id, item.name);
-                                            }}
-                                            style={({ pressed }) => [
-                                                styles.historyBtn,
-                                                pressed && styles.btnPressed
-                                            ]}
-                                        >
-                                            <MaterialCommunityIcons name="history" size={12} color={serviceBlue} />
-                                            <Text style={[styles.historyBtnText, { color: serviceBlue }]}>Geçmiş</Text>
-                                        </Pressable>
-                                    </View>
-                                </Pressable>
-                            );
-                        }}
-                        ListEmptyComponent={
-                            <View style={styles.emptyContainer}>
-                                <MaterialCommunityIcons name="package-variant-closed" size={48} color={colors.textTertiary} />
-                                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Ürün bulunamadı</Text>
-                            </View>
-                        }
-                    />
-                </View>
+                <FlatList
+                    data={filtered}
+                    keyExtractor={(item) => String(item.id)}
+                    renderItem={renderProduct}
+                    ListHeaderComponent={ListHeader}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[serviceBlue]} />}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <MaterialCommunityIcons name="package-variant-closed" size={48} color={colors.textTertiary} />
+                            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Ürün bulunamadı</Text>
+                        </View>
+                    }
+                />
             )}
 
-            {/* Stock Movements Modal */}
             <Modal
                 visible={movementsModalVisible}
                 animationType="slide"
@@ -367,7 +335,7 @@ export default function ProductListScreen({ navigation }) {
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                         <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>
                                 {selectedProductForMovements ? `${selectedProductForMovements} - Stok Geçmişi` : 'Stok Hareketleri'}
                             </Text>
                             <Pressable onPress={() => setMovementsModalVisible(false)} style={styles.closeBtn}>
@@ -382,7 +350,7 @@ export default function ProductListScreen({ navigation }) {
                         ) : (
                             <FlatList
                                 data={movements}
-                                keyExtractor={(item) => item.id.toString()}
+                                keyExtractor={(item) => String(item.id)}
                                 contentContainerStyle={{ padding: 16 }}
                                 renderItem={({ item }) => {
                                     const isAddition = item.movement_type === 'in' || item.movement_type === 'return';
@@ -390,20 +358,20 @@ export default function ProductListScreen({ navigation }) {
                                         <View style={[styles.movementItem, { borderBottomColor: colors.border }]}>
                                             <View style={[styles.movementIconWrap, { backgroundColor: isAddition ? `${serviceGreen}10` : `${serviceRed}10` }]}>
                                                 <MaterialCommunityIcons
-                                                    name={isAddition ? "plus-box-outline" : "minus-box-outline"}
+                                                    name={isAddition ? 'plus-box-outline' : 'minus-box-outline'}
                                                     size={22}
                                                     color={isAddition ? serviceGreen : serviceRed}
                                                 />
                                             </View>
-                                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                                <Text style={[styles.movementProdName, { color: colors.text }]}>
+                                            <View style={styles.movementInfo}>
+                                                <Text style={[styles.movementProdName, { color: colors.text }]} numberOfLines={1}>
                                                     {item.product_detail?.name || 'Ürün'}
                                                 </Text>
-                                                <Text style={[styles.movementDetailsText, { color: colors.textSecondary }]}>
+                                                <Text style={[styles.movementDetailsText, { color: colors.textSecondary }]} numberOfLines={1}>
                                                     Tür: {item.movement_type_display} • İşlem: {item.technician_name || 'Bilinmiyor'}
                                                 </Text>
                                                 {item.description && (
-                                                    <Text style={[styles.movementDescText, { color: colors.textTertiary }]}>
+                                                    <Text style={[styles.movementDescText, { color: colors.textTertiary }]} numberOfLines={2}>
                                                         Açıklama: {item.description}
                                                     </Text>
                                                 )}
@@ -432,8 +400,6 @@ export default function ProductListScreen({ navigation }) {
     );
 }
 
-
-
 const styles = StyleSheet.create({
     screen: { flex: 1 },
     centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -441,118 +407,104 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingBottom: 16,
+        paddingBottom: 12,
+        gap: 12,
     },
-    backBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+    iconButton: {
+        width: 46,
+        height: 46,
+        borderRadius: 14,
+        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    headerAddBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 10,
-        borderWidth: 1,
-    },
-    headerAddBtnText: {
-        fontSize: 12,
-        fontWeight: '800',
     },
     headerTitleWrap: {
         flex: 1,
-        marginLeft: 12,
-    },
-    headerTitleText: {
-        fontSize: 20,
-        fontWeight: '900',
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    listContent: { paddingHorizontal: 16, paddingTop: 8 },
-    statsScroll: {
-        marginBottom: 16,
-    },
-    inventoryHero: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 16,
-        borderWidth: 1,
-        padding: 14,
-        marginBottom: 12,
-        gap: 12,
-    },
-    inventoryHeroIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: serviceBlue,
-    },
-    inventoryHeroText: {
-        flex: 1,
         minWidth: 0,
     },
-    inventoryHeroLabel: {
-        fontSize: 11,
+    headerKicker: {
+        fontSize: 12,
         fontWeight: '700',
         marginBottom: 2,
     },
-    inventoryHeroTitle: {
-        fontSize: 15,
+    headerTitleText: {
+        fontSize: 24,
         fontWeight: '900',
+        letterSpacing: 0,
     },
-    heroAction: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
+    listContent: {
+        paddingHorizontal: 16,
+        paddingTop: 4,
+    },
+    summaryCard: {
+        borderRadius: 16,
         borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-    },
-    heroActionText: {
-        fontSize: 11,
-        fontWeight: '900',
-    },
-    statsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
+        padding: 14,
         marginBottom: 14,
     },
-    statCard: {
-        flexBasis: '48%',
-        flexGrow: 1,
-        minWidth: 150,
-        borderRadius: 14,
-        borderWidth: 1,
-        padding: 12,
+    summaryTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
     },
-    statIconWrap: {
-        width: 28,
-        height: 28,
-        borderRadius: 8,
+    summaryMainMetric: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        minWidth: 0,
+        gap: 10,
+    },
+    summaryMainMetricRight: {
+        flex: 1,
+        alignItems: 'flex-end',
+        minWidth: 0,
+    },
+    summaryIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 8,
     },
-    statLabel: {
-        fontSize: 10,
+    summaryLabel: {
+        fontSize: 11,
         fontWeight: '700',
     },
-    statValue: {
-        fontSize: 15,
+    summaryValue: {
+        fontSize: 22,
         fontWeight: '900',
-        marginTop: 3,
+        marginTop: 2,
+    },
+    summaryValueSmall: {
+        fontSize: 18,
+        fontWeight: '900',
+        marginTop: 2,
+        maxWidth: '100%',
+    },
+    summaryDivider: {
+        height: 1,
+        marginVertical: 12,
+        opacity: 0.85,
+    },
+    summaryMiniRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    summaryMiniItem: {
+        flex: 1,
+        minWidth: 0,
+    },
+    summaryMiniLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        marginBottom: 3,
+    },
+    summaryMiniValue: {
+        fontSize: 13,
+        fontWeight: '900',
     },
     categoryScroll: {
         marginBottom: 12,
@@ -560,27 +512,29 @@ const styles = StyleSheet.create({
     },
     categoryScrollContent: {
         flexDirection: 'row',
-        gap: 6,
+        gap: 8,
         paddingHorizontal: 16,
     },
     categoryChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 999,
+        minHeight: 40,
+        paddingHorizontal: 18,
+        borderRadius: 13,
         borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     categoryChipText: {
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: '800',
     },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 14,
-        borderWidth: 1.5,
-        paddingHorizontal: 12,
-        height: 48,
-        marginBottom: 14,
+        borderRadius: 15,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        height: 50,
+        marginBottom: 12,
     },
     searchInput: {
         flex: 1,
@@ -589,20 +543,15 @@ const styles = StyleSheet.create({
     },
     productCard: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        borderRadius: 14,
+        borderRadius: 16,
         borderWidth: 1,
-        padding: 14,
+        padding: 12,
         marginBottom: 10,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 1,
+        gap: 12,
     },
     imageWrap: {
-        width: 64,
-        height: 64,
+        width: 76,
+        height: 76,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
@@ -613,84 +562,77 @@ const styles = StyleSheet.create({
         height: '100%',
         resizeMode: 'cover',
     },
-    productDetails: {
+    productInfo: {
         flex: 1,
         minWidth: 0,
-        marginLeft: 12,
+    },
+    productTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+    },
+    productTitleArea: {
+        flex: 1,
+        minWidth: 0,
     },
     productNameText: {
-        fontSize: 14,
-        fontWeight: '800',
-        marginBottom: 2,
+        fontSize: 15,
+        fontWeight: '900',
+        marginBottom: 4,
     },
-    badgeRow: {
+    metaRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
         minWidth: 0,
-        marginBottom: 6,
+        gap: 5,
     },
-    catText: {
+    metaText: {
         flexShrink: 1,
         fontSize: 11,
         fontWeight: '700',
     },
-    dotSeparator: {
+    metaDot: {
         fontSize: 10,
-        marginHorizontal: 2,
-    },
-    skuText: {
-        flexShrink: 1,
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    productStatsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        rowGap: 4,
-    },
-    productStatCol: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    productStatLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        marginRight: 6,
-    },
-    productStatVal: {
-        fontSize: 12,
-        fontWeight: '800',
-    },
-    productCardRight: {
-        alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        minHeight: 60,
-    },
-    statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    statusBadgeText: {
-        fontSize: 9,
         fontWeight: '900',
     },
-    historyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-        borderWidth: 1.2,
-        borderColor: 'rgba(37, 99, 235, 0.15)',
-        marginTop: 6,
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
     },
-    historyBtnText: {
-        fontSize: 9,
-        fontWeight: '800',
+    statusBadgeText: {
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    productBottomRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        marginTop: 12,
+    },
+    productMetric: {
+        minWidth: 72,
+    },
+    metricLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    metricValue: {
+        fontSize: 13,
+        fontWeight: '900',
+    },
+    metricDivider: {
+        width: 1,
+        height: 26,
+        marginHorizontal: 12,
+    },
+    historyIconBtn: {
+        marginLeft: 'auto',
+        width: 34,
+        height: 34,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 10,
     },
     emptyContainer: {
         alignItems: 'center',
@@ -699,30 +641,16 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '700',
         marginTop: 12,
     },
-    actionBtnSecondary: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 48,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        gap: 6,
-    },
-    actionBtnSecondaryText: {
-        fontSize: 13,
-        fontWeight: '800',
-    },
     btnPressed: {
-        opacity: 0.85,
+        opacity: 0.82,
+        transform: [{ scale: 0.99 }],
     },
-    // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         justifyContent: 'flex-end',
     },
     modalContent: {
@@ -738,6 +666,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         padding: 16,
         borderBottomWidth: 1,
+        gap: 12,
     },
     modalTitle: {
         flex: 1,
@@ -745,8 +674,8 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
     closeBtn: {
-        width: 32,
-        height: 32,
+        width: 34,
+        height: 34,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -767,6 +696,11 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    movementInfo: {
+        flex: 1,
+        minWidth: 0,
+        marginLeft: 12,
     },
     movementProdName: {
         fontSize: 13,
