@@ -4,7 +4,6 @@ import {
     Alert,
     FlatList,
     Image,
-    Modal,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -19,12 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
-import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
-import dayjs from 'dayjs';
-import 'dayjs/locale/tr';
-
-dayjs.locale('tr');
-
+import { serviceBlue, serviceOrange, serviceRed } from '@/theme/color';
 const toNumber = (value) => {
     const parsed = Number(value || 0);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -42,10 +36,6 @@ export default function ProductListScreen({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
-    const [movementsModalVisible, setMovementsModalVisible] = useState(false);
-    const [movements, setMovements] = useState([]);
-    const [movementsLoading, setMovementsLoading] = useState(false);
-    const [selectedProductForMovements, setSelectedProductForMovements] = useState(null);
 
     const fetchData = useCallback(async () => {
         try {
@@ -73,23 +63,6 @@ export default function ProductListScreen({ navigation }) {
     const handleRefresh = () => {
         setRefreshing(true);
         fetchData();
-    };
-
-    const fetchStockMovements = async (productId = null, productName = '') => {
-        try {
-            setMovementsLoading(true);
-            setSelectedProductForMovements(productName);
-            setMovementsModalVisible(true);
-            const response = await api.get(ENDPOINTS.PRODUCTS.STOCK_MOVEMENTS, {
-                params: productId ? { product: productId } : undefined,
-            });
-            setMovements(Array.isArray(response?.data) ? response.data : []);
-        } catch (error) {
-            console.log('Stock movements fetch error:', error?.response?.data || error?.message || error);
-            Alert.alert('Hata', 'Stok hareketleri yüklenemedi');
-        } finally {
-            setMovementsLoading(false);
-        }
     };
 
     const inventorySummary = useMemo(() => {
@@ -135,7 +108,7 @@ export default function ProductListScreen({ navigation }) {
 
         return (
             <Pressable
-                onPress={() => navigation.navigate('AdminProductForm', { product: item })}
+                onPress={() => navigation.navigate('AdminProductDetail', { product: item, productId: item.id })}
                 style={({ pressed }) => [
                     styles.productCard,
                     { backgroundColor: colors.surface, borderColor: colors.border },
@@ -184,16 +157,7 @@ export default function ProductListScreen({ navigation }) {
                             <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>Fiyat</Text>
                             <Text style={[styles.metricValue, { color: colors.text }]}>{formatCurrency(item.price)}</Text>
                         </View>
-                        <Pressable
-                            onPress={(e) => {
-                                e.stopPropagation();
-                                fetchStockMovements(item.id, item.name);
-                            }}
-                            hitSlop={10}
-                            style={styles.historyIconBtn}
-                        >
-                            <MaterialCommunityIcons name="dots-vertical" size={22} color={colors.textSecondary} />
-                        </Pressable>
+                        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
                     </View>
                 </View>
             </Pressable>
@@ -326,76 +290,6 @@ export default function ProductListScreen({ navigation }) {
                 />
             )}
 
-            <Modal
-                visible={movementsModalVisible}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setMovementsModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-                        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={2}>
-                                {selectedProductForMovements ? `${selectedProductForMovements} - Stok Geçmişi` : 'Stok Hareketleri'}
-                            </Text>
-                            <Pressable onPress={() => setMovementsModalVisible(false)} style={styles.closeBtn}>
-                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                            </Pressable>
-                        </View>
-
-                        {movementsLoading ? (
-                            <View style={styles.modalLoading}>
-                                <ActivityIndicator size="large" color={serviceBlue} />
-                            </View>
-                        ) : (
-                            <FlatList
-                                data={movements}
-                                keyExtractor={(item) => String(item.id)}
-                                contentContainerStyle={{ padding: 16 }}
-                                renderItem={({ item }) => {
-                                    const isAddition = item.movement_type === 'in' || item.movement_type === 'return';
-                                    return (
-                                        <View style={[styles.movementItem, { borderBottomColor: colors.border }]}>
-                                            <View style={[styles.movementIconWrap, { backgroundColor: isAddition ? `${serviceGreen}10` : `${serviceRed}10` }]}>
-                                                <MaterialCommunityIcons
-                                                    name={isAddition ? 'plus-box-outline' : 'minus-box-outline'}
-                                                    size={22}
-                                                    color={isAddition ? serviceGreen : serviceRed}
-                                                />
-                                            </View>
-                                            <View style={styles.movementInfo}>
-                                                <Text style={[styles.movementProdName, { color: colors.text }]} numberOfLines={1}>
-                                                    {item.product_detail?.name || 'Ürün'}
-                                                </Text>
-                                                <Text style={[styles.movementDetailsText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                                    Tür: {item.movement_type_display} • İşlem: {item.technician_name || 'Bilinmiyor'}
-                                                </Text>
-                                                {item.description && (
-                                                    <Text style={[styles.movementDescText, { color: colors.textTertiary }]} numberOfLines={2}>
-                                                        Açıklama: {item.description}
-                                                    </Text>
-                                                )}
-                                                <Text style={[styles.movementDateText, { color: colors.textTertiary }]}>
-                                                    {dayjs(item.created_at).format('DD MMM YYYY HH:mm')}
-                                                </Text>
-                                            </View>
-                                            <Text style={[styles.movementQuantityText, { color: isAddition ? serviceGreen : serviceRed }]}>
-                                                {isAddition ? '+' : '-'}{item.quantity}
-                                            </Text>
-                                        </View>
-                                    );
-                                }}
-                                ListEmptyComponent={
-                                    <View style={styles.emptyContainer}>
-                                        <MaterialCommunityIcons name="swap-vertical" size={48} color={colors.textTertiary} />
-                                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Stok hareketi bulunamadı</Text>
-                                    </View>
-                                }
-                            />
-                        )}
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 }
@@ -626,14 +520,6 @@ const styles = StyleSheet.create({
         height: 26,
         marginHorizontal: 12,
     },
-    historyIconBtn: {
-        marginLeft: 'auto',
-        width: 34,
-        height: 34,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 10,
-    },
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -647,82 +533,5 @@ const styles = StyleSheet.create({
     btnPressed: {
         opacity: 0.82,
         transform: [{ scale: 0.99 }],
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.55)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        maxHeight: '78%',
-        minHeight: '48%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        overflow: 'hidden',
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: 1,
-        gap: 12,
-    },
-    modalTitle: {
-        flex: 1,
-        fontSize: 16,
-        fontWeight: '900',
-    },
-    closeBtn: {
-        width: 34,
-        height: 34,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    modalLoading: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    movementItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-    },
-    movementIconWrap: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    movementInfo: {
-        flex: 1,
-        minWidth: 0,
-        marginLeft: 12,
-    },
-    movementProdName: {
-        fontSize: 13,
-        fontWeight: '800',
-        marginBottom: 2,
-    },
-    movementDetailsText: {
-        fontSize: 11,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    movementDescText: {
-        fontSize: 10,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    movementDateText: {
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    movementQuantityText: {
-        fontSize: 14,
-        fontWeight: '900',
     },
 });

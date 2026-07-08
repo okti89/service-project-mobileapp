@@ -12,6 +12,7 @@ import CustomerDetailScreen from "@/screens/customers/CustomerDetailScreen";
 import CustomerFormScreen from "@/screens/customers/CustomerFormScreen";
 import ProductListScreen from "@/screens/products/ProductListScreen";
 import ProductFormScreen from "@/screens/products/ProductFormScreen";
+import ProductDetailScreen from "@/screens/products/ProductDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +30,7 @@ export default function AdminPanelNavigator() {
             <Stack.Screen name="AdminCustomerDetail" component={CustomerDetailScreen} />
             <Stack.Screen name="AdminCustomerForm" component={CustomerFormScreen} />
             <Stack.Screen name="AdminProducts" component={ProductListScreen} />
+            <Stack.Screen name="AdminProductDetail" component={ProductDetailScreen} />
             <Stack.Screen name="AdminProductForm" component={ProductFormScreen} />
         </Stack.Navigator>
     );
