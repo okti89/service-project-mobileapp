@@ -11,8 +11,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/theme/spacing';
 
-const ALL_EDGES = ['top', 'left', 'right'];
-const NO_BOTTOM_EDGES = ['top', 'left', 'right'];
+export const ALL_EDGES = ['top', 'left', 'right', 'bottom'];
+export const NO_BOTTOM_EDGES = ['top', 'left', 'right'];
 
 /**
  * WrapperContainer
@@ -29,8 +29,12 @@ const NO_BOTTOM_EDGES = ['top', 'left', 'right'];
  *    `bg="transparent"` verip dıştan sarmalayabilirsiniz.
  *
  * @param {string} [bg]                Arka plan rengi. Varsayılan: theme.background
- * @param {string[]} [edges]           Safe area kenarları. Varsayılan: tümü.
- *                                     Tab bar'lı ekranlarda ['top','left','right'] önerilir.
+ * @param {string[]} [edges]           Safe area kenarları. Varsayılan: ALL_EDGES = ['top','left','right','bottom'].
+ *                                     İstediğiniz kenarı geçebilirsiniz:
+ *                                       - ALL_EDGES        (dışa aktarılmıştır)
+ *                                       - NO_BOTTOM_EDGES  (dışa aktarılmıştır)
+ *                                       - Veya özel dizi: ['top', 'right'] vb.
+ *                                     withTabBar=true olduğunda bu prop geçersiz kalır.
  * @param {boolean} [padded]           Yatayda spacing.gutter padding uygular
  * @param {boolean} [scroll]           İçeriği ScrollView ile sarar
  * @param {boolean} [keyboardAvoiding] KeyboardAvoidingView ile sarar
@@ -62,6 +66,8 @@ const WrapperContainer = ({
     contentContainerStyle,
     style,
     scrollProps,
+
+
 }) => {
     const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
@@ -125,7 +131,8 @@ const WrapperContainer = ({
     const body = keyboardAvoiding ? (
         <KeyboardAvoidingView
             style={styles.fill}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
             {inner}
         </KeyboardAvoidingView>

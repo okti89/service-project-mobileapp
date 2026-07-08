@@ -112,16 +112,32 @@ const UserCard = ({ user, onApprove, onReject, onCall, onWhatsApp, actionLoading
                             <>
                                 <Pressable
                                     onPress={() => onWhatsApp(phone)}
-                                    style={styles.actionBtn}
+                                    disabled={actionLoading}
+                                    style={({ pressed }) => [
+                                        styles.actionBtn,
+                                        {
+                                            borderColor: '#25D36640',
+                                            backgroundColor: '#25D36615',
+                                        },
+                                        pressed && { opacity: 0.7 },
+                                    ]}
                                 >
-                                    <MaterialCommunityIcons name="whatsapp" size={16} color="#25D366" />
-                                    <Text style={[styles.actionText, { color: '#25D366' }]}>WhatsApp</Text>
+                                    <MaterialCommunityIcons name="whatsapp" size={15} color="#25D366" />
+                                    <Text style={[styles.actionText, { color: '#25D366' }]}>Mesaj</Text>
                                 </Pressable>
                                 <Pressable
                                     onPress={() => onCall(phone)}
-                                    style={styles.actionBtn}
+                                    disabled={actionLoading}
+                                    style={({ pressed }) => [
+                                        styles.actionBtn,
+                                        {
+                                            borderColor: `${serviceBlue}40`,
+                                            backgroundColor: `${serviceBlue}15`,
+                                        },
+                                        pressed && { opacity: 0.7 },
+                                    ]}
                                 >
-                                    <MaterialCommunityIcons name="phone" size={16} color={serviceBlue} />
+                                    <MaterialCommunityIcons name="phone" size={15} color={serviceBlue} />
                                     <Text style={[styles.actionText, { color: serviceBlue }]}>Ara</Text>
                                 </Pressable>
                             </>
@@ -130,28 +146,30 @@ const UserCard = ({ user, onApprove, onReject, onCall, onWhatsApp, actionLoading
                         {isPending ? (
                             <>
                                 <Pressable
-                                    onPress={() => onReject(user)}
-                                    disabled={actionLoading}
-                                    style={[
-                                        styles.actionBtn,
-                                        styles.rejectBtn,
-                                        { backgroundColor: `${serviceRed}15`, opacity: actionLoading ? 0.5 : 1 },
-                                    ]}
-                                >
-                                    <MaterialCommunityIcons name="close" size={16} color={serviceRed} />
-                                    <Text style={[styles.actionText, { color: serviceRed }]}>Reddet</Text>
-                                </Pressable>
-                                <Pressable
                                     onPress={() => onApprove(user)}
                                     disabled={actionLoading}
-                                    style={[
-                                        styles.actionBtn,
-                                        styles.approveBtn,
-                                        { backgroundColor: `${serviceGreen}15`, opacity: actionLoading ? 0.5 : 1 },
+                                    style={({ pressed }) => [
+                                        styles.actionBtnFilled,
+                                        { backgroundColor: serviceGreen, opacity: (actionLoading || pressed) ? 0.65 : 1 },
                                     ]}
                                 >
-                                    <MaterialCommunityIcons name="check" size={16} color={serviceGreen} />
-                                    <Text style={[styles.actionText, { color: serviceGreen }]}>Onayla</Text>
+                                    {actionLoading
+                                        ? <ActivityIndicator size="small" color="#FFFFFF" />
+                                        : <Text style={styles.actionBtnFilledText}>Onayla</Text>
+                                    }
+                                </Pressable>
+                                <Pressable
+                                    onPress={() => onReject(user)}
+                                    disabled={actionLoading}
+                                    style={({ pressed }) => [
+                                        styles.actionBtnFilled,
+                                        { backgroundColor: serviceRed, opacity: (actionLoading || pressed) ? 0.65 : 1 },
+                                    ]}
+                                >
+                                    {actionLoading
+                                        ? <ActivityIndicator size="small" color="#FFFFFF" />
+                                        : <Text style={styles.actionBtnFilledText}>Reddet</Text>
+                                    }
                                 </Pressable>
                             </>
                         ) : null}
@@ -160,14 +178,15 @@ const UserCard = ({ user, onApprove, onReject, onCall, onWhatsApp, actionLoading
                             <Pressable
                                 onPress={() => onApprove(user)}
                                 disabled={actionLoading}
-                                style={[
-                                    styles.actionBtn,
-                                    styles.approveBtn,
-                                    { backgroundColor: `${serviceGreen}15`, opacity: actionLoading ? 0.5 : 1 },
+                                style={({ pressed }) => [
+                                    styles.actionBtnFilled,
+                                    { backgroundColor: serviceGreen, opacity: (actionLoading || pressed) ? 0.65 : 1 },
                                 ]}
                             >
-                                <MaterialCommunityIcons name="check" size={16} color={serviceGreen} />
-                                <Text style={[styles.actionText, { color: serviceGreen }]}>Onayla</Text>
+                                {actionLoading
+                                    ? <ActivityIndicator size="small" color="#FFFFFF" />
+                                    : <Text style={styles.actionBtnFilledText}>Onayla</Text>
+                                }
                             </Pressable>
                         ) : null}
 
@@ -175,14 +194,15 @@ const UserCard = ({ user, onApprove, onReject, onCall, onWhatsApp, actionLoading
                             <Pressable
                                 onPress={() => onReject(user)}
                                 disabled={actionLoading}
-                                style={[
-                                    styles.actionBtn,
-                                    styles.rejectBtn,
-                                    { backgroundColor: `${serviceRed}15`, opacity: actionLoading ? 0.5 : 1 },
+                                style={({ pressed }) => [
+                                    styles.actionBtnFilled,
+                                    { backgroundColor: serviceRed, opacity: (actionLoading || pressed) ? 0.65 : 1 },
                                 ]}
                             >
-                                <MaterialCommunityIcons name="close" size={16} color={serviceRed} />
-                                <Text style={[styles.actionText, { color: serviceRed }]}>İptal Et</Text>
+                                {actionLoading
+                                    ? <ActivityIndicator size="small" color="#FFFFFF" />
+                                    : <Text style={styles.actionBtnFilledText}>İptal Et</Text>
+                                }
                             </Pressable>
                         ) : null}
                     </View>
@@ -512,20 +532,29 @@ const styles = StyleSheet.create({
     actionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
         gap: 6,
     },
     actionBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 7,
+        borderRadius: 9,
+        borderWidth: 1,
         gap: 4,
     },
     actionText: { fontSize: 12, fontWeight: '700' },
-    approveBtn: {},
-    rejectBtn: {},
+    actionBtnFilled: {
+        flex: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 8,
+        borderRadius: 9,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionBtnFilledText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
     emptyCard: {
         alignItems: 'center',
         justifyContent: 'center',

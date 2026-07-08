@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
     forwardRef,
     useCallback,
     useEffect,
@@ -66,10 +66,12 @@ const TechnicianPickerSheet = forwardRef(({
     const rowBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)';
     const sheetBg = isDark ? colors.surface : '#F8FAFC';
 
-    const options = useMemo(
-        () => [{ id: null, full_name: 'Atanmamış' }, ...technicians],
-        [technicians]
-    );
+    const options = useMemo(() => {
+        if (includeUnassigned) {
+            return [{ id: null, full_name: 'Atanmamış' }, ...technicians];
+        }
+        return technicians;
+    }, [technicians, includeUnassigned]);
 
     const renderBackdrop = useCallback(
         (props) => (

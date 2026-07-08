@@ -21,16 +21,12 @@ const AppBottomSheet = forwardRef(function AppBottomSheet({
     handleIndicatorStyle,
 }, ref) {
     const sheetRef = useRef(null);
-    const [shouldRender, setShouldRender] = useState(visible);
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
 
     useImperativeHandle(ref, () => ({
         present: () => {
-            setShouldRender(true);
-            requestAnimationFrame(() => {
-                sheetRef.current?.present();
-            });
+            sheetRef.current?.present();
         },
         dismiss: () => {
             sheetRef.current?.dismiss();
@@ -45,47 +41,22 @@ const AppBottomSheet = forwardRef(function AppBottomSheet({
         return snapPoints && snapPoints.length > 0 ? snapPoints : ['60%'];
     }, [enableDynamicSizing, snapPoints]);
 
+    const [remountKey, setRemountKey] = useState(0);
+
     useEffect(() => {
         if (visible) {
-            setShouldRender(true);
+            const frameId = requestAnimationFrame(() => {
+                sheetRef.current?.present();
+            });
+            return () => cancelAnimationFrame(frameId);
+        } else {
+            sheetRef.current?.dismiss();
+            setRemountKey(prev => prev + 1);
         }
     }, [visible]);
 
     useEffect(() => {
-        if (!shouldRender) return undefined;
-
-        let frameId = null;
-        let nestedFrameId = null;
-
-        if (visible) {
-            frameId = requestAnimationFrame(() => {
-                nestedFrameId = requestAnimationFrame(() => {
-                    sheetRef.current?.present();
-                });
-            });
-        } else {
-            sheetRef.current?.dismiss();
-        }
-
-        return () => {
-            if (frameId !== null) cancelAnimationFrame(frameId);
-            if (nestedFrameId !== null) cancelAnimationFrame(nestedFrameId);
-        };
-    }, [shouldRender, visible]);
-
-    useEffect(() => {
-        if (!shouldRender) return undefined;
-        if (visible) return undefined;
-
-        const fallback = setTimeout(() => {
-            setShouldRender(false);
-        }, 600);
-
-        return () => clearTimeout(fallback);
-    }, [shouldRender, visible]);
-
-    useEffect(() => {
-        if (!shouldRender) return undefined;
+        if (!visible) return undefined;
 
         const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
             sheetRef.current?.dismiss();
@@ -95,13 +66,10 @@ const AppBottomSheet = forwardRef(function AppBottomSheet({
         return () => {
             subscription.remove();
         };
-    }, [shouldRender]);
+    }, [visible, remountKey]);
 
     const handleDismiss = () => {
-        setShouldRender(false);
-        if (visible) {
-            onClose?.();
-        }
+        onClose?.();
     };
 
     const renderBackdrop = (props) => (
@@ -114,12 +82,9 @@ const AppBottomSheet = forwardRef(function AppBottomSheet({
         />
     );
 
-    if (!shouldRender) {
-        return null;
-    }
-
     return (
         <BottomSheetModal
+            key={remountKey}
             ref={sheetRef}
             index={0}
             snapPoints={resolvedSnapPoints}

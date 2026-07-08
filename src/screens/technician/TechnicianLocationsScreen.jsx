@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo, useState, useEffect, useRef } from '
 import {
     ActivityIndicator,
     Dimensions,
+    Image,
     Pressable,
     StyleSheet,
     Text,
@@ -24,6 +25,8 @@ import { useTheme } from '@/context/ThemeContext';
 import AppBottomSheet from '@/components/AppBottomSheet';
 import { getMapProvider } from '@/config/maps';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
+import TechnicianPickerSheet from '@/components/home/TechnicianPickerSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -196,13 +199,12 @@ const CalendarModal = ({ visible, selectedDate, onSelectDate, onClose, dayCountB
             contentContainerStyle={styles.calendarModal}
         >
             <View style={styles.calendarHeader}>
-                <Pressable onPress={onClose} style={styles.calendarCloseButton}>
-                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                </Pressable>
                 <Text style={[styles.calendarTitle, { color: colors.text }]}>
                     {currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
                 </Text>
-                <View style={styles.calendarCloseButton} />
+                <Pressable onPress={onClose} style={styles.calendarCloseButton}>
+                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                </Pressable>
             </View>
 
             <View style={styles.calendarNav}>
@@ -294,63 +296,84 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
         }
     }, [locations, onLocationPress]);
 
-    const markers = useMemo(() => locations.map((item, index) => {
-        const isStart = index === 0;
-        const isEnd = index === locations.length - 1;
-        let color = serviceBlue;
-        let icon = null;
-        const isSelected = String(selectedLocationId || '') === String(item.id);
-        const displayAddress = buildDisplayAddress(item, resolvedAddresses);
+    const markers = useMemo(() => {
+        if (locations.length === 0) return [];
 
-        if (isStart) {
-            color = serviceGreen;
-            icon = 'play';
-        } else if (isEnd) {
-            color = serviceRed;
-            icon = 'flag-checkered';
-        }
+        const total = locations.length;
+        const maxIntermediateMarkers = 15;
 
-        return (
-            <Marker
-                key={`${item.id}-${isSelected ? 'selected' : 'normal'}`}
-                coordinate={{ latitude: item.latitude, longitude: item.longitude }}
-                title={isStart ? 'Baslangic' : isEnd ? 'Bitis' : `${index + 1}. Konum`}
-                description={`${dayjs(item.created_at).format('HH:mm')} · ${displayAddress}`}
-                anchor={{ x: 0.5, y: 0.72 }}
-                onPress={() => onLocationPress?.(item)}
-            >
-                <View style={[styles.markerTapArea, isSelected && styles.markerTapAreaSelected]}>
-                    <View style={styles.markerWrap}>
-                        {isStart || isEnd ? (
-                            <View style={[
-                                styles.markerSpecial,
-                                { backgroundColor: color, borderColor: isSelected ? serviceOrange : '#fff' },
-                                isSelected && styles.markerSelected,
-                            ]}>
-                                <MaterialCommunityIcons name={icon} size={14} color="#fff" />
-                            </View>
-                        ) : (
-                            <View style={[
-                                styles.markerNumber,
-                                { backgroundColor: color, borderColor: isSelected ? serviceOrange : '#fff' },
-                                isSelected && styles.markerSelected,
-                            ]}>
-                                <Text style={styles.markerText}>{index + 1}</Text>
-                            </View>
-                        )}
-                        <View style={[styles.markerTail, { borderTopColor: color }]} />
+        return locations.map((item, index) => {
+            const isStart = index === 0;
+            const isEnd = index === total - 1;
+            const isSelected = String(selectedLocationId || '') === String(item.id);
+
+            // Determine if we should render this marker
+            let shouldRender = isStart || isEnd || isSelected;
+
+            if (!shouldRender && total > 2) {
+                // Sample intermediate markers: only render if index matches the step size
+                const step = Math.ceil((total - 2) / maxIntermediateMarkers);
+                if ((index - 1) % step === 0) {
+                    shouldRender = true;
+                }
+            }
+
+            if (!shouldRender) return null;
+
+            let color = serviceBlue;
+            let icon = null;
+            const displayAddress = buildDisplayAddress(item, resolvedAddresses);
+
+            if (isStart) {
+                color = serviceGreen;
+                icon = 'play';
+            } else if (isEnd) {
+                color = serviceRed;
+                icon = 'flag-checkered';
+            }
+
+            return (
+                <Marker
+                    key={`${item.id}-${isSelected ? 'selected' : 'normal'}`}
+                    coordinate={{ latitude: item.latitude, longitude: item.longitude }}
+                    title={isStart ? 'Başlangıç' : isEnd ? 'Bitiş' : `${index + 1}. Konum`}
+                    description={`${dayjs(item.created_at).format('HH:mm')} · ${displayAddress}`}
+                    anchor={{ x: 0.5, y: 0.72 }}
+                    onPress={() => onLocationPress?.(item)}
+                >
+                    <View style={[styles.markerTapArea, isSelected && styles.markerTapAreaSelected]}>
+                        <View style={styles.markerWrap}>
+                            {isStart || isEnd ? (
+                                <View style={[
+                                    styles.markerSpecial,
+                                    { backgroundColor: color, borderColor: isSelected ? serviceOrange : '#fff' },
+                                    isSelected && styles.markerSelected,
+                                ]}>
+                                    <Text style={styles.markerText}>{index + 1}</Text>
+                                </View>
+                            ) : (
+                                <View style={[
+                                    styles.markerNumber,
+                                    { backgroundColor: color, borderColor: isSelected ? serviceOrange : '#fff' },
+                                    isSelected && styles.markerSelected,
+                                ]}>
+                                    <Text style={styles.markerText}>{index + 1}</Text>
+                                </View>
+                            )}
+                            <View style={[styles.markerTail, { borderTopColor: color }]} />
+                        </View>
                     </View>
-                </View>
-            </Marker>
-        );
-    }), [locations, onLocationPress, selectedLocationId, resolvedAddresses]);
+                </Marker>
+            );
+        }).filter(Boolean);
+    }, [locations, onLocationPress, selectedLocationId, resolvedAddresses]);
 
     if (loadingLocations) {
         return (
             <View style={styles.mapWrapper}>
                 <View style={[styles.loaderContainer, { backgroundColor: colors.surfaceMuted }]}>
                     <ActivityIndicator size="large" color={colors.info} />
-                    <Text style={[styles.loaderText, { color: colors.textSecondary }]}>Konumlar yukleniyor...</Text>
+                    <Text style={[styles.loaderText, { color: colors.textSecondary }]}>Konumlar yükleniyor...</Text>
                 </View>
             </View>
         );
@@ -363,9 +386,9 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
                     <View style={[styles.emptyIconCircle, { backgroundColor: `${colors.info}15` }]}>
                         <MaterialCommunityIcons name="map-marker-off-outline" size={44} color={colors.info} />
                     </View>
-                    <Text style={[styles.emptyTitle, { color: colors.text }]}>Konum Verisi Bulunamadi</Text>
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>Konum Verisi Bulunamadı</Text>
                     <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-                        Secilen teknisyen icin bu tarihte kaydedilmis herhangi bir konum verisi mevcut degil.
+                        Seçilen teknisyen için bu tarihte kaydedilmiş herhangi bir konum verisi mevcut değil.
                     </Text>
                 </View>
             </View>
@@ -432,12 +455,12 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
                             backgroundColor: colors.info,
                             shadowColor: colors.shadow,
                             opacity: pressed ? 0.85 : 1,
-                            bottom: 24 + insetsBottom,
+                            bottom: 12 + insetsBottom,
                         },
                     ]}
                 >
                     <MaterialCommunityIcons name="map-marker-path" size={20} color="#fff" />
-                    <Text style={styles.fabLabel}>Rota Gecmisi</Text>
+                    <Text style={styles.fabLabel}>Rota Geçmişi</Text>
                     {locations.length > 0 && (
                         <View style={styles.fabBadge}>
                             <Text style={styles.fabBadgeText}>{locations.length}</Text>
@@ -463,8 +486,8 @@ export default function TechnicianLocationsScreen({ navigation }) {
     const [technicians, setTechnicians] = useState([]);
     const [selectedTechnician, setSelectedTechnician] = useState(null);
     const [selectedLocationId, setSelectedLocationId] = useState(null);
-    const [isTechModalVisible, setIsTechModalVisible] = useState(false);
     const [isRouteHistoryVisible, setIsRouteHistoryVisible] = useState(false);
+    const techPickerRef = useRef(null);
 
     const [locations, setLocations] = useState([]);
     const [locationDayCounts, setLocationDayCounts] = useState({});
@@ -487,10 +510,13 @@ export default function TechnicianLocationsScreen({ navigation }) {
             setLoadingTechs(true);
             try {
                 const response = await api.get(ENDPOINTS.TECHNICIAN.LIST);
-                setTechnicians(response.data);
-                // Select first technician if available
-                if (response.data && response.data.length > 0) {
-                    setSelectedTechnician(response.data[0]);
+                const data = Array.isArray(response.data) ? response.data : [];
+                const sorted = data.sort((a, b) =>
+                    (a.full_name || '').localeCompare(b.full_name || '', 'tr', { sensitivity: 'base' })
+                );
+                setTechnicians(sorted);
+                if (sorted.length > 0) {
+                    setSelectedTechnician(sorted[0]);
                 }
             } catch (err) {
                 console.error('Failed to fetch technicians:', err);
@@ -895,41 +921,42 @@ export default function TechnicianLocationsScreen({ navigation }) {
     return (
         <View style={[styles.screen, { backgroundColor: colors.background }]}>
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+            <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
                     <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
                 </Pressable>
                 <View style={styles.headerTitleContainer}>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>Teknisyen Konumları</Text>
-                    {selectedTechnician && (
-                        <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-                            {selectedTechnician.full_name}
-                        </Text>
-                    )}
                 </View>
-                <Pressable
-                    onPress={() => setIsTechModalVisible(true)}
-                    style={[styles.techSelectButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                    <MaterialCommunityIcons name="account-search-outline" size={22} color={colors.info} />
-                </Pressable>
             </View>
 
             {/* Filter Bar: Date and Technician select triggers */}
             <View style={[styles.filterBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+                {/* Technician Selector */}
+                <Pressable
+                    onPress={() => techPickerRef.current?.present()}
+                    style={[styles.techFilterBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                    <MaterialCommunityIcons name="account" size={16} color={colors.info} style={{ marginRight: 6 }} />
+                    <Text style={[styles.techFilterBtnText, { color: colors.text }]} numberOfLines={1}>
+                        {selectedTechnician ? selectedTechnician.full_name : 'Teknisyen Seçin'}
+                    </Text>
+                    <MaterialCommunityIcons name="chevron-down" size={14} color={colors.textSecondary} />
+                </Pressable>
+
                 {/* Date Navigator */}
-                <View style={styles.dateNavigator}>
-                    <Pressable onPress={() => changeDate(-1)} style={styles.dateNavButton}>
-                        <MaterialCommunityIcons name="chevron-left" size={24} color={colors.textSecondary} />
+                <View style={styles.dateNavigatorCompact}>
+                    <Pressable onPress={() => changeDate(-1)} style={styles.dateNavButtonCompact}>
+                        <MaterialCommunityIcons name="chevron-left" size={20} color={colors.textSecondary} />
                     </Pressable>
-                    <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateDisplay}>
-                        <MaterialCommunityIcons name="calendar-month-outline" size={16} color={colors.info} style={{ marginRight: 6 }} />
-                        <Text style={[styles.dateText, { color: colors.text }]}>
-                            {selectedDate.format('DD MMMM YYYY')}
+                    <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateDisplayCompact}>
+                        <MaterialCommunityIcons name="calendar-month-outline" size={14} color={colors.info} style={{ marginRight: 4 }} />
+                        <Text style={[styles.dateTextCompact, { color: colors.text }]}>
+                            {selectedDate.format('DD MMM YYYY')}
                         </Text>
                     </Pressable>
-                    <Pressable onPress={() => changeDate(1)} style={styles.dateNavButton}>
-                        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
+                    <Pressable onPress={() => changeDate(1)} style={styles.dateNavButtonCompact}>
+                        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                     </Pressable>
                 </View>
             </View>
@@ -1045,82 +1072,17 @@ export default function TechnicianLocationsScreen({ navigation }) {
             )}
 
             {/* Modal: Technician Selection List */}
-            <AppBottomSheet
-                visible={isTechModalVisible}
-                onClose={() => setIsTechModalVisible(false)}
-                snapPoints={['62%']}
-                contentContainerStyle={styles.modalContainer}
-                wrapContent={false}
-            >
-                {/* Modal Header */}
-                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.modalTitle, { color: colors.text }]}>Teknisyen Seçin</Text>
-                    <Pressable onPress={() => setIsTechModalVisible(false)} style={styles.closeButton}>
-                        <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-                    </Pressable>
-                </View>
-
-                {/* Modal List */}
-                {loadingTechs ? (
-                    <View style={styles.modalLoader}>
-                        <ActivityIndicator size="large" color={colors.info} />
-                    </View>
-                ) : (
-                    <BottomSheetFlatList
-                        style={styles.sheetList}
-                        data={technicians}
-                        keyExtractor={(item) => item.id.toString()}
-                        contentContainerStyle={styles.modalListContent}
-                        keyboardShouldPersistTaps="handled"
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={false}
-                        renderItem={({ item }) => {
-                            const isSelected = selectedTechnician?.id === item.id;
-                            const initials = (item.full_name || 'T P')
-                                .split(' ')
-                                .map(n => n[0])
-                                .join('')
-                                .toUpperCase()
-                                .slice(0, 2);
-
-                            return (
-                                <Pressable
-                                    onPress={() => {
-                                        setSelectedTechnician(item);
-                                        setIsTechModalVisible(false);
-                                    }}
-                                    style={[
-                                        styles.modalItem,
-                                        {
-                                            backgroundColor: isSelected ? `${colors.info}10` : colors.surface,
-                                            borderColor: isSelected ? colors.info : colors.border
-                                        }
-                                    ]}
-                                >
-                                    <View style={[styles.avatarCircle, { backgroundColor: `${colors.info}20` }]}>
-                                        <Text style={[styles.avatarText, { color: colors.info }]}>{initials}</Text>
-                                    </View>
-                                    <View style={styles.modalItemDetails}>
-                                        <Text style={[styles.techName, { color: colors.text }]}>{item.full_name}</Text>
-                                        <View style={styles.techStatusRow}>
-                                            <View style={[
-                                                styles.statusDot,
-                                                { backgroundColor: item.is_online ? serviceGreen : colors.textTertiary }
-                                            ]} />
-                                            <Text style={[styles.techStatusText, { color: colors.textSecondary }]}>
-                                                {item.is_online ? 'Çevrimiçi' : 'Çevrimdışı'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    {isSelected && (
-                                        <MaterialCommunityIcons name="check-circle" size={22} color={colors.info} />
-                                    )}
-                                </Pressable>
-                            );
-                        }}
-                    />
-                )}
-            </AppBottomSheet>
+            <TechnicianPickerSheet
+                ref={techPickerRef}
+                technicians={technicians}
+                loading={loadingTechs}
+                selectedTechnicianId={selectedTechnician?.id}
+                includeUnassigned={false}
+                onSelect={(tech) => {
+                    setSelectedTechnician(tech);
+                    techPickerRef.current?.dismiss();
+                }}
+            />
 
             {/* Bottom Sheet: Daily Route History */}
             <AppBottomSheet
@@ -1366,30 +1328,42 @@ const styles = StyleSheet.create({
     filterBar: {
         flexDirection: 'row',
         paddingVertical: 10,
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         borderBottomWidth: 1,
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 8,
     },
-    dateNavigator: {
+    techFilterBtn: {
+        flex: 1.2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    techFilterBtnText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    dateNavigatorCompact: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flex: 1,
-        maxWidth: 320,
     },
-    dateNavButton: {
+    dateNavButtonCompact: {
         padding: 4,
     },
-    dateDisplay: {
+    dateDisplayCompact: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
         paddingVertical: 6,
-        paddingHorizontal: 16,
+        paddingHorizontal: 4,
     },
-    dateText: {
-        fontSize: 15,
+    dateTextCompact: {
+        fontSize: 13,
         fontWeight: '700',
     },
     mapWrapper: {
@@ -1699,6 +1673,7 @@ const styles = StyleSheet.create({
     },
     modalListContent: {
         padding: 16,
+        paddingBottom: 48,
     },
     modalItem: {
         flexDirection: 'row',
@@ -1714,6 +1689,12 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        marginRight: 12,
+    },
+    avatarImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         marginRight: 12,
     },
     avatarText: {

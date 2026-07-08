@@ -1,70 +1,26 @@
-import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated } from "react-native";
+import React from "react";
+import { View, StyleSheet } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRoute } from "@react-navigation/native";
 import { useTheme } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
-
-import HomeScreen from '@/screens/home/HomeScreen';
-import ServicesScreen from '@/screens/services/ServicesScreen';
-import AppointmentsScreen from '@/screens/appointments/AppointmentsScreen';
+import { useAuth } from "@/context/AuthContext";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import HomeScreen from "@/screens/home/HomeScreen";
+import DevScreen from "@/screens/dev/DevScreen";
+import AdminPanelNavigator from "./AdminPanelNavigator";
 import ProfileScreen from "@/screens/profile/ProfileScreen";
-import AdminPanelNavigator from "@/navigation/AdminPanelNavigator";
 
 const Tab = createBottomTabNavigator();
-
-function CenterTabButton({ primaryColor, surfaceColor, focused, isAdmin }) {
-    const route = useRoute();
-    if (route?.name !== 'AdminPanel') return null;
-
-    const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0.9)).current;
-
-    useEffect(() => {
-        Animated.spring(scaleAnim, {
-            toValue: focused ? 1 : 0.9,
-            useNativeDriver: true,
-            friction: 4,
-            tension: 140,
-        }).start();
-    }, [focused, scaleAnim]);
-
-    return (
-        <View style={styles.centerOuter}>
-            <View style={styles.centerWrapper}>
-                <Animated.View
-                    style={[
-                        styles.centerButton,
-                        {
-                            backgroundColor: focused ? primaryColor : surfaceColor,
-                            borderColor: primaryColor,
-                            borderWidth: focused ? 0 : 2,
-                            shadowColor: primaryColor,
-                            shadowOpacity: focused ? 0.28 : 0.10,
-                            elevation: focused ? 8 : 3,
-                            transform: [{ scale: scaleAnim }],
-                        },
-                    ]}
-                >
-                    <MaterialCommunityIcons
-                        name={isAdmin ? 'shield-crown' : 'account-hard-hat'}
-                        size={26}
-                        color={focused ? '#FFFFFF' : primaryColor}
-                    />
-                </Animated.View>
-            </View>
-        </View>
-    );
-}
 
 const ICON_MAP = {
     Home: { focused: 'home-variant', unfocused: 'home-variant-outline' },
     Services: { focused: 'view-list', unfocused: 'view-list' },
     Appointments: { focused: 'calendar', unfocused: 'calendar-outline' },
     Profile: { focused: 'account', unfocused: 'account-outline' },
+    Dev: { focused: 'flask', unfocused: 'flask-outline' },
+    AdminPanel: { focused: 'account-cog', unfocused: 'account-cog-outline' },
 };
-
 function RegularTabIcon({ focused, color }) {
     const route = useRoute();
     const entry = ICON_MAP[route?.name];
@@ -78,37 +34,31 @@ function RegularTabIcon({ focused, color }) {
     );
 }
 
+
 function TabIconRouter({ focused, color, primaryColor, surfaceColor, isAdmin }) {
-    const route = useRoute();
-    if (route?.name === 'AdminPanel') {
-        return (
-            <CenterTabButton
-                primaryColor={primaryColor}
-                surfaceColor={surfaceColor}
-                focused={focused}
-                isAdmin={isAdmin}
-            />
-        );
-    }
-    return <RegularTabIcon focused={focused} color={color} />;
+    return (
+        <RegularTabIcon
+            focused={focused}
+            color={color}
+        />
+    );
 }
 
 export default function BottomNavigation() {
     const { colors } = useTheme();
-    const { isAdmin } = useAuth();
+    const { isAdmin } = useAuth()
     const insets = useSafeAreaInsets();
-    const bottomInset = Math.max(insets.bottom, 8);
+    const bottomInset = Math.max(insets.bottom, 8)
+
 
     const tabBarStyle = {
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
-        height: 66 + bottomInset,
-        paddingTop: 10,
-        paddingBottom: bottomInset,
+        height: 56 + bottomInset,
         elevation: 12,
-        overflow: 'visible',
-    };
+        overflow: 'visible'
+    }
 
     return (
         <Tab.Navigator
@@ -120,8 +70,8 @@ export default function BottomNavigation() {
                 tabBarInactiveTintColor: colors.textTertiary,
                 tabBarLabelStyle: {
                     fontSize: 11,
-                    fontWeight: '600',
-                    marginTop: 4,
+                    fontWeight: 600,
+                    marginTop: 4
                 },
                 tabBarStyle,
                 tabBarIcon: ({ focused, color }) => (
@@ -130,27 +80,11 @@ export default function BottomNavigation() {
                         color={color}
                         primaryColor={colors.primary}
                         surfaceColor={colors.surface}
-                        isAdmin={isAdmin}
-                    />
+                        isAdmin={isAdmin} />
                 ),
-            }}
-        >
-            <Tab.Screen
-                name="Home"
-                component={HomeScreen}
-                options={{
-                    title: 'Ana Sayfa',
-                    tabBarShowLabel: true,
-                }}
-            />
-            <Tab.Screen
-                name="Services"
-                component={ServicesScreen}
-                options={{
-                    title: 'Servisler',
-                    tabBarShowLabel: true,
-                }}
-            />
+
+            }}>
+            <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Ana Sayfa', tabBarShowLabel: true }} />
             <Tab.Screen
                 name="AdminPanel"
                 component={AdminPanelNavigator}
@@ -159,26 +93,25 @@ export default function BottomNavigation() {
                     tabBarShowLabel: true,
                 }}
             />
-            <Tab.Screen
-                name="Appointments"
-                component={AppointmentsScreen}
-                options={{
-                    title: 'Randevular',
-                    tabBarShowLabel: true,
-                }}
-            />
-            <Tab.Screen
-                name="Profile"
-                component={ProfileScreen}
-                options={{
-                    title: 'Profil',
-                    tabBarShowLabel: true,
-                }}
-            />
-        </Tab.Navigator>
-    );
-}
+            <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil', tabBarShowLabel: true }} />
 
+
+            {
+                __DEV__ ? (
+
+                    <Tab.Screen name="Dev"
+                        component={DevScreen}
+                        options={{
+                            title: 'Dev',
+                            tabBarShowLabel: true,
+                        }}
+                    />
+                ) : null
+            }
+        </Tab.Navigator>
+
+    )
+}
 const styles = StyleSheet.create({
     iconOuter: {
         width: 32,

@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -19,6 +19,7 @@ const CustomInput = ({
     const [isFocused, setIsFocused] = useState(false);
     const [hidePassword, setHidePassword] = useState(password);
     const { colors } = useTheme();
+    const inputRef = useRef(null);
 
     const formatTrPhone = (digits) => {
         if (!digits) return '';
@@ -82,7 +83,8 @@ const CustomInput = ({
                     {label}
                 </Text>
             )}
-            <View
+            <Pressable
+                onPress={() => inputRef.current?.focus()}
                 style={[
                     styles.inputContainer,
                     {
@@ -101,7 +103,8 @@ const CustomInput = ({
                     />
                 )}
                 <TextInput
-                    style={[styles.input, { color: '#0F172A' }]}
+                    ref={inputRef}
+                    style={[styles.input, { color: '#0F172A' }, props.style, props.multiline && { paddingRight: 32 }]}
                     autoCorrect={false}
                     onFocus={() => {
                         onFocus();
@@ -120,7 +123,7 @@ const CustomInput = ({
                     <TouchableOpacity
                         onPressIn={handleClear}
                         activeOpacity={0.9}
-                        style={styles.actionIcon}
+                        style={[styles.actionIcon, props.multiline && { position: 'absolute', right: 12, top: 12 }]}
                     >
                         <MaterialCommunityIcons name="close-circle" size={20} color={colors.textTertiary} />
                     </TouchableOpacity>
@@ -135,7 +138,7 @@ const CustomInput = ({
                         />
                     </TouchableOpacity>
                 )}
-            </View>
+            </Pressable>
             {error && (
                 <Text style={[styles.errorText, { color: colors.error }]}>
                     {error}

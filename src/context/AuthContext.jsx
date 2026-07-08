@@ -203,7 +203,7 @@ export const AuthProvider = ({ children }) => {
             if (!data?.token || !data?.user) {
                 return {
                     success: false,
-                    error: 'Giris yapilamadi. Lutfen bilgilerinizi kontrol edin.',
+                    error: 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.',
                 };
             }
 
@@ -230,7 +230,7 @@ export const AuthProvider = ({ children }) => {
                 error:
                     data?.non_field_errors?.[0] ||
                     data?.detail ||
-                    'Giris yapilamadi. Lutfen bilgilerinizi kontrol edin.',
+                    'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.',
                 fieldErrors: data,
             };
         }

@@ -15,88 +15,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { useTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import CustomInput from '@/components/CustomInput';
 import { serviceBlue, serviceRed } from '@/theme/color';
 
-const Input = ({ label, icon, value, onChangeText, placeholder, error, multiline, number, maxLength, trailingText }) => {
-    const { colors } = useTheme();
-    const [focused, setFocused] = useState(false);
-    const borderColor = error
-        ? serviceRed
-        : focused
-            ? serviceBlue
-            : colors.border;
 
-    return (
-        <View style={styles.fieldWrap}>
-            <View style={styles.fieldLabel}>
-                <MaterialCommunityIcons
-                    name={icon}
-                    size={14}
-                    color={error ? serviceRed : focused ? serviceBlue : colors.textSecondary}
-                />
-                <Text style={[
-                    styles.fieldLabelText,
-                    { color: error ? serviceRed : focused ? serviceBlue : colors.textSecondary },
-                ]}>
-                    {label}
-                </Text>
-            </View>
-            <View
-                style={[
-                    styles.fieldChip,
-                    multiline && styles.fieldChipArea,
-                    { borderColor, backgroundColor: colors.background },
-                    focused && styles.fieldChipFocused,
-                ]}
-            >
-                <TextInput
-                    style={[
-                        styles.input,
-                        multiline && styles.textArea,
-                        { color: colors.text },
-                    ]}
-                    value={value}
-                    onChangeText={onChangeText}
-                    placeholder={placeholder}
-                    placeholderTextColor={colors.textTertiary}
-                    multiline={multiline}
-                    numberOfLines={number || 3}
-                    maxLength={maxLength}
-                    onFocus={() => setFocused(true)}
-                    onBlur={() => setFocused(false)}
-                />
-                {trailingText ? (
-                    <Text style={[styles.fieldTrailing, { color: colors.textTertiary }]}>
-                        {trailingText}
-                    </Text>
-                ) : null}
-            </View>
-            {error ? (
-                <View style={styles.errorRow}>
-                    <MaterialCommunityIcons name="alert-circle" size={13} color={serviceRed} />
-                    <Text style={styles.errorText}>{error}</Text>
-                </View>
-            ) : null}
-        </View>
-    );
-};
-
-const SectionTitle = ({ icon, title }) => {
-    const { colors } = useTheme();
-    return (
-        <View style={styles.sectionTitleRow}>
-            <View style={[styles.sectionIconWrap, { backgroundColor: `${serviceBlue}15` }]}>
-                <MaterialCommunityIcons name={icon} size={14} color={serviceBlue} />
-            </View>
-            <Text style={[styles.sectionTitleText, { color: colors.textSecondary }]}>
-                {title.toUpperCase()}
-            </Text>
-        </View>
-    );
-};
 
 const FormCard = ({ children, style }) => {
     const { colors } = useTheme();
@@ -110,6 +35,7 @@ const FormCard = ({ children, style }) => {
 export default function CustomerFormScreen({ navigation, route }) {
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
+    const { showToast } = useToast();
 
     const customer = route?.params?.customer || null;
     const isEdit = Boolean(customer);
@@ -173,17 +99,19 @@ export default function CustomerFormScreen({ navigation, route }) {
         try {
             if (isEdit) {
                 await api.put(ENDPOINTS.CUSTOMERS.DETAIL(customer.id), payload);
+                showToast('success', 'Müşteri Güncellendi', 'Müşteri bilgileri başarıyla güncellendi.');
             } else {
-                await api.post(ENDPOINTS.CUSTOMERS.LIST, payload);
+                await api.post(ENDPOINTS.CUSTOMERS.CREATE, payload);
+                showToast('success', 'Müşteri Eklendi', 'Yeni müşteri başarıyla eklendi.');
             }
             navigation.goBack();
         } catch (error) {
             const responseData = error?.response?.data;
             if (responseData && typeof responseData === 'object') {
                 if (Array.isArray(responseData)) {
-                    Alert.alert('Hata', responseData[0] || responseData.message || 'Kaydetme başarısız');
+                    showToast('error', 'Hata', responseData[0] || responseData.message || 'Kaydetme başarısız');
                 } else if (responseData.detail) {
-                    Alert.alert('Hata', responseData.detail);
+                    showToast('error', 'Hata', responseData.detail);
                 } else {
                     const fieldErrors = {};
                     Object.keys(responseData).forEach(key => {
@@ -192,12 +120,13 @@ export default function CustomerFormScreen({ navigation, route }) {
                     });
                     if (Object.keys(fieldErrors).length > 0) {
                         setErrors(fieldErrors);
+                        showToast('error', 'Hata', 'Lütfen formdaki hataları kontrol edin.');
                     } else {
-                        Alert.alert('Hata', 'Kaydetme başarısız');
+                        showToast('error', 'Hata', 'Kaydetme başarısız');
                     }
                 }
             } else {
-                Alert.alert('Hata', 'Sunucu hatası oluştu');
+                showToast('error', 'Hata', 'Sunucu hatası oluştu');
             }
         } finally {
             setSaving(false);
@@ -217,9 +146,10 @@ export default function CustomerFormScreen({ navigation, route }) {
                     onPress: async () => {
                         try {
                             await api.delete(ENDPOINTS.CUSTOMERS.DETAIL(customer.id));
+                            showToast('success', 'Müşteri Silindi', 'Müşteri kaydı başarıyla silindi.');
                             navigation.goBack();
                         } catch (error) {
-                            Alert.alert('Hata', error?.response?.data?.detail || 'Silme başarısız');
+                            showToast('error', 'Hata', error?.response?.data?.detail || 'Silme başarısız');
                         }
                     },
                 },
@@ -248,17 +178,17 @@ export default function CustomerFormScreen({ navigation, route }) {
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 20}
             >
                 <ScrollView
                     style={styles.body}
                     contentContainerStyle={[
                         styles.bodyContent,
-                        { paddingBottom: insets.bottom + 24 },
+                        { paddingBottom: insets.bottom + 140 },
                     ]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <SectionTitle icon="account-outline" title="Kişisel Bilgiler" />
                     <FormCard>
                         <CustomInput
                             label="Ad Soyad *"
@@ -268,10 +198,6 @@ export default function CustomerFormScreen({ navigation, route }) {
                             placeholder="Müşteri adı ve soyadı"
                             error={errors.full_name}
                         />
-                    </FormCard>
-
-                    <SectionTitle icon="phone-outline" title="İletişim" />
-                    <FormCard>
                         <CustomInput
                             label="Telefon"
                             icon="phone-outline"
@@ -290,11 +216,7 @@ export default function CustomerFormScreen({ navigation, route }) {
                             error={errors.email}
                             disableSmartFormat
                         />
-                    </FormCard>
-
-                    <SectionTitle icon="map-marker-outline" title="Adres & Notlar" />
-                    <FormCard>
-                        <Input
+                        <CustomInput
                             label="Adres"
                             icon="map-marker-outline"
                             value={form.address}
@@ -302,8 +224,11 @@ export default function CustomerFormScreen({ navigation, route }) {
                             placeholder="Müşteri adresi..."
                             error={errors.address}
                             multiline
+                            numberOfLines={3}
+                            inputContainerStyle={{ height: 90, alignItems: 'flex-start', paddingTop: 8 }}
+                            style={{ textAlignVertical: 'top', height: 80, color: '#0F172A' }}
                         />
-                        <Input
+                        <CustomInput
                             label="Not"
                             icon="note-text-outline"
                             value={form.note}
@@ -311,9 +236,10 @@ export default function CustomerFormScreen({ navigation, route }) {
                             placeholder="Müşteri ile ilgili notlar..."
                             error={errors.note}
                             multiline
-                            number={3}
+                            numberOfLines={3}
                             maxLength={500}
-                            trailingText={`${(form.note || '').length}/500`}
+                            inputContainerStyle={{ height: 90, alignItems: 'flex-start', paddingTop: 8 }}
+                            style={{ textAlignVertical: 'top', height: 80, color: '#0F172A' }}
                         />
                     </FormCard>
 

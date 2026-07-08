@@ -184,9 +184,10 @@ const Header = ({
 
     const renderLeft = () => {
         if (left) return left;
-        // Tab navigator içindeyken showBack bilinçli olarak yok sayılır:
-        // goBack() üst Stack'e atlıyor ve diğer sekmelerin tab bar'ı bozuluyor.
-        if (showBack && !isInsideTab) return renderBackButton();
+        // Tab navigator içindeyken showBack daha önceden engelleniyordu,
+        // ancak Tab içindeki bir Stack'in alt sayfalarında (örn. AdminUsersScreen)
+        // geri butonuna kesinlikle ihtiyaç vardır.
+        if (showBack) return renderBackButton();
         return null;
     };
 

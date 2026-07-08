@@ -464,6 +464,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: spacing.gutter,
+        borderBottomWidth: 1,
+        borderBottomColor: "#c6c6c6",
+        paddingBottom: 5
 
     },
     brandRow: {
@@ -476,7 +479,7 @@ const styles = StyleSheet.create({
     logoFrame: {
         width: 46,
         height: 46,
-        borderRadius: 23,
+        borderRadius: 13,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
@@ -485,7 +488,7 @@ const styles = StyleSheet.create({
     logo: {
         width: 34,
         height: 34,
-        borderRadius: 17,
+        borderRadius: 13,
     },
     brandText: {
         flex: 1,

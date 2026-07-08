@@ -1,243 +1,251 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     View,
-    TextInput
+    Platform,
+    Modal,
+    KeyboardAvoidingView,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import CustomInput from '@/components/CustomInput';
-import { serviceBlue, serviceGreen, serviceRed } from '@/theme/color';
-
-const getImageUrl = (image) => {
-    if (!image) return null;
-    if (String(image).startsWith('http')) return image;
-    const apiRoot = String(api.defaults.baseURL || '').replace(/\/api\/?$/, '');
-    const normalized = String(image).startsWith('/') ? image : `/${image}`;
-    return `${apiRoot}${normalized}`;
-};
-
-const getUploadFile = (uri) => {
-    const cleanUri = String(uri || '').split('?')[0];
-    const rawName = cleanUri.split('/').pop() || '';
-    const hasExtension = /\.[a-z0-9]+$/i.test(rawName);
-    const name = hasExtension ? rawName : `product_${Date.now()}.jpg`;
-    const ext = name.split('.').pop()?.toLowerCase();
-    const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-    return { uri, name, type };
-};
-
-const Input = ({ label, icon, value, onChangeText, placeholder, error, multiline, number }) => {
-    const { colors } = useTheme();
-    return (
-        <View style={styles.fieldWrap}>
-            <View style={styles.fieldLabel}>
-                <MaterialCommunityIcons name={icon} size={16} color={error ? serviceRed : colors.textSecondary} />
-                <Text style={[styles.fieldLabelText, { color: error ? serviceRed : colors.textSecondary }]}>{label}</Text>
-            </View>
-            <View style={[styles.inputWrap, { borderColor: error ? serviceRed : colors.border, backgroundColor: colors.background }]}>
-                <TextInput
-                    style={[styles.input, { color: colors.text }, multiline && styles.textArea]}
-                    value={value}
-                    onChangeText={onChangeText}
-                    placeholder={placeholder}
-                    placeholderTextColor={colors.textTertiary}
-                    multiline={multiline}
-                    numberOfLines={number || 3}
-                />
-            </View>
-            {error && (
-                <View style={styles.errorRow}>
-                    <MaterialCommunityIcons name="alert-circle" size={14} color={serviceRed} />
-                    <Text style={styles.errorText}>{error}</Text>
-                </View>
-            )}
-        </View>
-    );
-};
+import { serviceBlue, serviceRed, serviceGreen } from '@/theme/color';
 
 export default function ProductFormScreen({ navigation, route }) {
-    const { product } = route.params || {};
     const insets = useSafeAreaInsets();
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
+    const { showToast } = useToast();
 
-    const isEdit = Boolean(product);
+    const product = route?.params?.product;
+    const isEdit = !!product;
 
     const [form, setForm] = useState({
         name: '',
-        category_id: null,
+        category_id: '',
         price: '',
-        stock_quantity: '',
+        stock_quantity: '1',
         description: '',
     });
-    const [errors, setErrors] = useState({});
-    const [saving, setSaving] = useState(false);
+    const [imageUri, setImageUri] = useState(null);
     const [categories, setCategories] = useState([]);
-    const [loadingCats, setLoadingCats] = useState(true);
-    const [selectedImage, setSelectedImage] = useState(null);
+    const [loadingCategories, setLoadingCategories] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [errors, setErrors] = useState({});
+
+    // Picker states
+    const [pickerVisible, setPickerVisible] = useState(false);
 
     useEffect(() => {
-        if (isEdit && product) {
+        const fetchCategories = async () => {
+            try {
+                setLoadingCategories(true);
+                const response = await api.get(ENDPOINTS.PRODUCTS.CATEGORIES);
+                setCategories(Array.isArray(response?.data) ? response.data : []);
+            } catch (error) {
+                console.log('Categories load error:', error);
+            } finally {
+                setLoadingCategories(false);
+            }
+        };
+        fetchCategories();
+
+        if (isEdit) {
             setForm({
                 name: product.name || '',
-                category_id: product.category_detail?.id || null,
-                price: product.price?.toString() || '',
-                stock_quantity: product.stock_quantity?.toString() || '',
+                category_id: product.category_detail?.id || '',
+                price: product.price ? String(Number(product.price).toLocaleString('tr-TR')) : '',
+                stock_quantity: String(product.stock_quantity || '0'),
                 description: product.description || '',
             });
+            if (product.image) {
+                setImageUri(product.image);
+            }
         }
     }, [isEdit, product]);
 
-    const fetchCategories = useCallback(async () => {
-        try {
-            const response = await api.get(ENDPOINTS.PRODUCTS.CATEGORIES);
-            setCategories(Array.isArray(response.data) ? response.data : []);
-        } catch (error) {
-            console.log('Categories fetch error:', error?.response?.data || error?.message || error);
-        } finally {
-            setLoadingCats(false);
-        }
-    }, []);
-
-    useEffect(() => { fetchCategories(); }, [fetchCategories]);
-
-    const setField = (key, value) => {
-        setForm(prev => ({ ...prev, [key]: value }));
+    const setField = (key, val) => {
+        setForm(prev => ({ ...prev, [key]: val }));
         if (errors[key]) {
             setErrors(prev => ({ ...prev, [key]: null }));
         }
     };
 
-    const pickImage = async () => {
-        try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Izni yok', 'Galeri erisimi icin izin gerekli');
-                return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-            });
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setSelectedImage(result.assets[0].uri);
-            }
-        } catch (error) {
-            Alert.alert('Hata', 'Gorsel secilemedi');
+    const handlePriceChange = (text) => {
+        let clean = text.replace(/\D/g, '');
+        if (!clean) {
+            setField('price', '');
+            return;
         }
+        const formatted = Number(clean).toLocaleString('tr-TR');
+        setField('price', formatted);
     };
 
-    const takeImage = async () => {
-        try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Izni yok', 'Kamera erisimi icin izin gerekli');
-                return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-            });
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setSelectedImage(result.assets[0].uri);
-            }
-        } catch (error) {
-            Alert.alert('Hata', 'Kamera acilamadi');
-        }
+    const requestPermissions = async () => {
+        const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
+        const galleryStatus = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        return cameraStatus.granted && galleryStatus.granted;
     };
 
-    const handleSave = async () => {
-        if (!form.name.trim()) {
-            setErrors({ name: 'Urun adi gerekli' });
+    const handleSelectImage = async (source) => {
+        setImageSourceModalVisible(false);
+        const hasPermission = await requestPermissions();
+        if (!hasPermission) {
+            Alert.alert('Yetki Gerekli', 'Kamera ve galeri izinlerini onaylamanız gerekmektedir.');
             return;
         }
 
-        setSaving(true);
-        setErrors({});
+        let result;
+        const options = {
+            mediaTypes: ImagePicker.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        };
 
         try {
-            if (selectedImage) {
-                const formData = new FormData();
-                formData.append('name', form.name.trim());
-                if (form.category_id) formData.append('category_id', form.category_id);
-                formData.append('price', String(parseFloat(form.price) || 0));
-                formData.append('stock_quantity', String(parseInt(form.stock_quantity, 10) || 0));
-                formData.append('description', form.description.trim());
-
-                formData.append('image', getUploadFile(selectedImage));
-
-                if (isEdit) {
-                    await api.patch(ENDPOINTS.PRODUCTS.DETAIL(product.id), formData);
-                } else {
-                    await api.post(ENDPOINTS.PRODUCTS.LIST, formData);
-                }
+            if (source === 'camera') {
+                result = await ImagePicker.launchCameraAsync(options);
             } else {
-                const payload = {
-                    name: form.name.trim(),
-                    category_id: form.category_id || null,
-                    price: parseFloat(form.price) || 0,
-                    stock_quantity: parseInt(form.stock_quantity, 10) || 0,
-                    description: form.description.trim(),
-                };
-                if (isEdit) {
-                    await api.patch(ENDPOINTS.PRODUCTS.DETAIL(product.id), payload);
-                } else {
-                    await api.post(ENDPOINTS.PRODUCTS.LIST, payload);
-                }
+                result = await ImagePicker.launchImageLibraryAsync(options);
             }
-            Alert.alert('Basarili', isEdit ? 'Urun guncellendi' : 'Urun olusturuldu');
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setImageUri(result.assets[0].uri);
+            }
+        } catch (error) {
+            console.log('Image picker error:', error);
+            showToast('error', 'Hata', 'Fotoğraf seçilirken bir hata oluştu.');
+        }
+    };
+
+    const validate = () => {
+        const errs = {};
+        if (!form.name.trim()) errs.name = 'Ürün adı zorunludur.';
+        const cleanPrice = form.price.replace(/\./g, '');
+        if (!cleanPrice.trim() || isNaN(cleanPrice) || Number(cleanPrice) < 0) {
+            errs.price = 'Geçerli bir fiyat girin.';
+        }
+        if (!form.stock_quantity.trim() || isNaN(form.stock_quantity) || Number(form.stock_quantity) < 0) {
+            errs.stock_quantity = 'Geçerli bir stok miktarı girin.';
+        }
+        setErrors(errs);
+        return Object.keys(errs).length === 0;
+    };
+
+    const handleSave = async () => {
+        if (!validate()) return;
+
+        setSaving(true);
+        const formData = new FormData();
+        formData.append('name', form.name.trim());
+        const cleanPrice = form.price.replace(/\./g, '');
+        formData.append('price', Number(cleanPrice));
+        formData.append('stock_quantity', parseInt(form.stock_quantity, 10));
+        formData.append('description', form.description.trim());
+        if (form.category_id) {
+            formData.append('category_id', form.category_id);
+        }
+
+        if (imageUri && !imageUri.startsWith('http')) {
+            const filename = imageUri.split('/').pop();
+            const match = /\.(\w+)$/.exec(filename || '');
+            const type = match ? `image/${match[1]}` : `image`;
+            formData.append('image', {
+                uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
+                name: filename || 'product.jpg',
+                type,
+            });
+        }
+
+        try {
+            if (isEdit) {
+                await api.patch(ENDPOINTS.PRODUCTS.DETAIL(product.id), formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                showToast('success', 'Ürün Güncellendi', 'Ürün bilgileri başarıyla güncellendi.');
+            } else {
+                await api.post(ENDPOINTS.PRODUCTS.LIST, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                showToast('success', 'Ürün Eklendi', 'Yeni ürün başarıyla eklendi.');
+            }
             navigation.goBack();
         } catch (error) {
-            const data = error?.response?.data;
-            if (data && typeof data === 'object') {
-                if (data.detail) {
-                    Alert.alert('Hata', data.detail);
+            console.log('Product save error:', error?.response?.data || error?.message || error);
+            const responseData = error?.response?.data;
+            if (responseData && typeof responseData === 'object') {
+                if (responseData.detail) {
+                    showToast('error', 'Hata', responseData.detail);
                 } else {
                     const fieldErrors = {};
-                    Object.keys(data).forEach(key => {
-                        fieldErrors[key] = Array.isArray(data[key]) ? data[key].join(', ') : data[key];
+                    Object.keys(responseData).forEach(key => {
+                        const msgs = responseData[key];
+                        fieldErrors[key] = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
                     });
-                    if (Object.keys(fieldErrors).length > 0) {
-                        setErrors(fieldErrors);
-                    } else {
-                        Alert.alert('Hata', 'Kaydetme basarisiz');
-                    }
+                    setErrors(fieldErrors);
+                    showToast('error', 'Hata', 'Lütfen formu kontrol edin.');
                 }
             } else {
-                Alert.alert('Hata', 'Sunucu hatasi olustu');
+                showToast('error', 'Hata', 'Ürün kaydedilemedi.');
             }
         } finally {
             setSaving(false);
         }
     };
 
+    const handleDelete = () => {
+        Alert.alert(
+            'Ürünü Sil',
+            `"${form.name}" envanterden tamamen silinecektir. Emin misiniz?`,
+            [
+                { text: 'İptal', style: 'cancel' },
+                {
+                    text: 'Sil',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setDeleting(true);
+                            await api.delete(ENDPOINTS.PRODUCTS.DETAIL(product.id));
+                            showToast('success', 'Ürün Silindi', 'Ürün envanterden silindi.');
+                            navigation.goBack();
+                        } catch (error) {
+                            showToast('error', 'Hata', error?.response?.data?.detail || 'Silme işlemi başarısız.');
+                        } finally {
+                            setDeleting(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const selectedCategoryName = categories.find(c => c.id === form.category_id)?.name || 'Kategori Seçilmedi';
+
     return (
-        <View style={[styles.screen, { backgroundColor: colors.background }]}>
-            <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-                <Pressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
-                    <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+        <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop: insets.top + 8, alignItems: 'center' }]}>
+                <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+                    <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
                 </Pressable>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>
-                    {isEdit ? 'Urun Düzenle' : 'Yeni Urun'}
-                </Text>
-                <Pressable onPress={handleSave} disabled={saving} style={styles.headerBtn}>
+                <View style={styles.headerTitleWrap}>
+                    <Text style={[styles.headerTitleText, { color: colors.text }]}>
+                        {isEdit ? 'Ürünü Düzenle' : 'Yeni Ürün'}
+                    </Text>
+                </View>
+                <Pressable onPress={handleSave} disabled={saving} style={styles.backBtn}>
                     {saving ? (
                         <ActivityIndicator size="small" color={serviceBlue} />
                     ) : (
@@ -246,174 +254,366 @@ export default function ProductFormScreen({ navigation, route }) {
                 </Pressable>
             </View>
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 20}
+            >
                 <ScrollView
                     style={styles.body}
-                    contentContainerStyle={[styles.bodyContent, { paddingBottom: insets.bottom + 20 }]}
+                    contentContainerStyle={[styles.bodyContent, { paddingBottom: insets.bottom + 140 }]}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <View style={[styles.imageSection, { backgroundColor: colors.surface }]}>
-                        <View style={styles.imagePicker}>
-                            {selectedImage || product?.image ? (
-                                <Image
-                                    source={{ uri: selectedImage || getImageUrl(product.image) }}
-                                    style={styles.productImage}
-                                />
-                            ) : (
-                                <View style={[styles.imagePlaceholder, { backgroundColor: `${serviceBlue}15` }]}>
-                                    <MaterialCommunityIcons name="camera-plus" size={36} color={serviceBlue} />
-                                    <Text style={[styles.imageHint, { color: serviceBlue }]}>Urun Fotografi Ekle</Text>
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.imageActions}>
-                            <Pressable onPress={pickImage} style={[styles.imageActionBtn, { backgroundColor: `${serviceBlue}15` }]}>
-                                <MaterialCommunityIcons name="image-multiple-outline" size={18} color={serviceBlue} />
-                                <Text style={[styles.imageActionText, { color: serviceBlue }]}>Galeri</Text>
-                            </Pressable>
-                            <Pressable onPress={takeImage} style={[styles.imageActionBtn, { backgroundColor: `${serviceGreen}15` }]}>
-                                <MaterialCommunityIcons name="camera-outline" size={18} color={serviceGreen} />
-                                <Text style={[styles.imageActionText, { color: serviceGreen }]}>Kamera</Text>
-                            </Pressable>
-                        </View>
+                    {/* Image Upload Area */}
+                    <View style={[styles.imageUploadArea, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        {imageUri ? (
+                             <View style={styles.previewContainer}>
+                                 <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+                                 <Pressable
+                                     onPress={() => setImageUri(null)}
+                                     style={styles.deleteImageBtn}
+                                 >
+                                     <MaterialCommunityIcons name="trash-can-outline" size={20} color="#FFFFFF" />
+                                 </Pressable>
+                             </View>
+                        ) : (
+                             <View style={styles.inlineSourceContainer}>
+                                 <Text style={[styles.uploadTitle, { color: colors.text, marginBottom: 12 }]}>Ürün Görseli Ekle</Text>
+                                 <View style={styles.inlineButtonsRow}>
+                                     <Pressable
+                                         onPress={() => handleSelectImage('camera')}
+                                         style={[styles.inlineSourceBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: colors.border }]}
+                                     >
+                                         <MaterialCommunityIcons name="camera" size={18} color={serviceBlue} />
+                                         <Text style={[styles.inlineSourceBtnText, { color: colors.text }]}>Kamera</Text>
+                                     </Pressable>
+
+                                     <Pressable
+                                         onPress={() => handleSelectImage('gallery')}
+                                         style={[styles.inlineSourceBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC', borderColor: colors.border }]}
+                                     >
+                                         <MaterialCommunityIcons name="image-multiple" size={18} color={serviceGreen} />
+                                         <Text style={[styles.inlineSourceBtnText, { color: colors.text }]}>Galeri</Text>
+                                     </Pressable>
+                                 </View>
+                             </View>
+                        )}
                     </View>
 
-                    <CustomInput
-                        label="Urun Adi *"
-                        icon="package-variant"
-                        value={form.name}
-                        onChangeText={v => setField('name', v)}
-                        placeholder="Urunun adi"
-                        error={errors.name}
-                    />
+                    {/* Form Cards */}
+                    <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <CustomInput
+                            label="Ürün Adı *"
+                            icon="package-variant"
+                            value={form.name}
+                            onChangeText={v => setField('name', v)}
+                            placeholder="Ürün veya yedek parça adı"
+                            error={errors.name}
+                            disableSmartFormat={true}
+                        />
 
-                    <View style={styles.fieldWrap}>
-                        <View style={styles.fieldLabel}>
-                            <MaterialCommunityIcons name="folder-outline" size={16} color={colors.textSecondary} />
-                            <Text style={[styles.fieldLabelText, { color: colors.textSecondary }]}>Kategori</Text>
+                        {/* Category Picker Selector */}
+                        <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>Kategori</Text>
+                        <Pressable
+                            onPress={() => setPickerVisible(true)}
+                            style={[styles.selectorBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                        >
+                            <MaterialCommunityIcons name="tag-outline" size={20} color={colors.textTertiary} style={{ marginRight: 8 }} />
+                            <Text style={[styles.selectorBtnText, { color: form.category_id ? colors.text : colors.textTertiary }]}>
+                                {selectedCategoryName}
+                            </Text>
+                            <MaterialCommunityIcons name="chevron-down" size={20} color={colors.textTertiary} />
+                        </Pressable>
+                        {errors.category_id && <Text style={styles.errorText}>{errors.category_id}</Text>}
+
+                        <CustomInput
+                            label="Birim Fiyat (₺) *"
+                            icon="cash"
+                            value={form.price}
+                            onChangeText={handlePriceChange}
+                            placeholder="Satış fiyatı (örn: 1.200)"
+                            keyboardType="numeric"
+                            error={errors.price}
+                            disableSmartFormat={true}
+                        />
+
+                        <CustomInput
+                            label="Stok Miktarı *"
+                            icon="archive-outline"
+                            value={form.stock_quantity}
+                            onChangeText={v => setField('stock_quantity', v)}
+                            placeholder="Mevcut stok adedi"
+                            keyboardType="numeric"
+                            error={errors.stock_quantity}
+                            disableSmartFormat={true}
+                        />
+
+                        <CustomInput
+                            label="Açıklama"
+                            icon="information-outline"
+                            value={form.description}
+                            onChangeText={v => setField('description', v)}
+                            placeholder="Ürün hakkında ek detaylar..."
+                            multiline
+                            numberOfLines={3}
+                            inputContainerStyle={{ height: 90, alignItems: 'flex-start', paddingTop: 8 }}
+                            style={{ textAlignVertical: 'top', height: 80, color: '#0F172A' }}
+                            disableSmartFormat={true}
+                        />
+                    </View>
+
+                    {/* Actions */}
+                    <View style={styles.actionsRow}>
+                        {isEdit && (
+                            <Pressable
+                                onPress={handleDelete}
+                                disabled={deleting}
+                                style={({ pressed }) => [
+                                    styles.deleteBtn,
+                                    { borderColor: `${serviceRed}40` },
+                                    pressed && styles.btnPressed,
+                                ]}
+                            >
+                                {deleting ? (
+                                    <ActivityIndicator size="small" color={serviceRed} />
+                                ) : (
+                                    <>
+                                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={serviceRed} />
+                                        <Text style={[styles.deleteBtnText, { color: serviceRed }]}>Sil</Text>
+                                    </>
+                                )}
+                            </Pressable>
+                        )}
+                        <Pressable
+                            onPress={handleSave}
+                            disabled={saving}
+                            style={({ pressed }) => [
+                                styles.saveBtn,
+                                { backgroundColor: serviceBlue },
+                                pressed && styles.btnPressed,
+                            ]}
+                        >
+                            {saving ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons
+                                        name={isEdit ? 'content-save-outline' : 'plus'}
+                                        size={20}
+                                        color="#FFFFFF"
+                                    />
+                                    <Text style={styles.saveBtnText}>
+                                        {isEdit ? 'Değişiklikleri Kaydet' : 'Ürünü Ekle'}
+                                    </Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* Category Dropdown Picker Modal */}
+            <Modal
+                visible={pickerVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setPickerVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.surface, maxHeight: '60%' }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>Kategori Seçin</Text>
+                            <Pressable onPress={() => setPickerVisible(false)} style={styles.closeBtn}>
+                                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
+                            </Pressable>
                         </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-                            <View style={styles.categoryRow}>
+                        {loadingCategories ? (
+                            <View style={{ padding: 24, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={serviceBlue} />
+                            </View>
+                        ) : (
+                            <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
                                 <Pressable
-                                    onPress={() => setField('category_id', null)}
-                                    style={[
-                                        styles.categoryChip,
-                                        {
-                                            backgroundColor: !form.category_id ? `${serviceBlue}20` : colors.surface,
-                                            borderColor: !form.category_id ? serviceBlue : colors.border,
-                                        }
-                                    ]}
+                                    onPress={() => {
+                                        setField('category_id', '');
+                                        setPickerVisible(false);
+                                    }}
+                                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
                                 >
-                                    <Text style={[styles.categoryChipText, { color: !form.category_id ? serviceBlue : colors.textSecondary }]}>
-                                        Kategorisiz
+                                    <Text style={[styles.pickerItemText, { color: !form.category_id ? serviceBlue : colors.text }]}>
+                                        Kategorisiz (Boş)
                                     </Text>
                                 </Pressable>
-                                {categories.map(cat => (
+                                {categories.map(c => (
                                     <Pressable
-                                        key={cat.id}
-                                        onPress={() => setField('category_id', cat.id)}
-                                        style={[
-                                            styles.categoryChip,
-                                            {
-                                                backgroundColor: form.category_id === cat.id ? `${serviceBlue}20` : colors.surface,
-                                                borderColor: form.category_id === cat.id ? serviceBlue : colors.border,
-                                            }
-                                        ]}
+                                        key={c.id}
+                                        onPress={() => {
+                                            setField('category_id', c.id);
+                                            setPickerVisible(false);
+                                        }}
+                                        style={[styles.pickerItem, { borderBottomColor: colors.border }]}
                                     >
-                                        <Text style={[styles.categoryChipText, { color: form.category_id === cat.id ? serviceBlue : colors.textSecondary }]}>
-                                            {cat.name}
+                                        <Text style={[styles.pickerItemText, { color: form.category_id === c.id ? serviceBlue : colors.text }]}>
+                                            {c.name}
                                         </Text>
                                     </Pressable>
                                 ))}
-                            </View>
-                        </ScrollView>
-                    </View>
-
-                    <View style={styles.priceStockRow}>
-                        <View style={{ flex: 1 }}>
-                            <CustomInput
-                                label="Fiyat (₺)"
-                                icon="currency-try"
-                                value={form.price}
-                                onChangeText={v => setField('price', v)}
-                                placeholder="0.00"
-                                error={errors.price}
-                            />
-                        </View>
-                        <View style={{ width: 16 }} />
-                        <View style={{ flex: 1 }}>
-                            <CustomInput
-                                label="Stok Adedi"
-                                icon="numeric"
-                                value={form.stock_quantity}
-                                onChangeText={v => setField('stock_quantity', v)}
-                                placeholder="0"
-                                error={errors.stock_quantity}
-                            />
-                        </View>
-                    </View>
-
-                    <Input
-                        label="Aciklama"
-                        icon="text"
-                        value={form.description}
-                        onChangeText={v => setField('description', v)}
-                        placeholder="Urun ile ilgili notlar..."
-                        multiline
-                    />
-
-                    <Pressable
-                        onPress={handleSave}
-                        disabled={saving}
-                        style={[styles.saveBtn, { backgroundColor: serviceBlue }]}
-                    >
-                        {saving ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name={isEdit ? 'content-save-outline' : 'plus'} size={20} color="#fff" />
-                                <Text style={styles.saveBtnText}>
-                                    {isEdit ? 'Kaydet' : 'Olustur'}
-                                </Text>
-                            </>
+                            </ScrollView>
                         )}
-                    </Pressable>
-                </ScrollView>
-            </KeyboardAvoidingView>
+                    </View>
+                </View>
+            </Modal>
+
         </View>
     );
 }
 
+
+
 const styles = StyleSheet.create({
     screen: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
-    headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    headerTitle: { fontSize: 20, fontWeight: '800' },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+    },
+    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    headerTitleWrap: { flex: 1, alignItems: 'center' },
+    headerTitleText: { fontSize: 18, fontWeight: '800' },
     body: { flex: 1 },
-    bodyContent: { padding: 16 },
-    imageSection: { borderRadius: 16, padding: 16, marginBottom: 16, alignItems: 'center' },
-    imagePicker: { width: 160, height: 160, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-    imagePlaceholder: { width: 120, height: 120, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderStyle: 'dashed' },
-    imagePreview: { width: 120, height: 120, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    productImage: { width: '100%', height: '100%', borderRadius: 18 },
-    imageHint: { fontSize: 12, fontWeight: '600', marginTop: 8 },
-    imageActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-    imageActionBtn: { minWidth: 108, minHeight: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 12 },
-    imageActionText: { fontSize: 12, fontWeight: '800' },
-    imageNote: { fontSize: 11, marginTop: 8 },
-    fieldWrap: { marginBottom: 16 },
-    fieldLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-    fieldLabelText: { fontSize: 13, fontWeight: '600' },
-    inputWrap: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 4 },
-    input: { fontSize: 15, minHeight: 44, paddingVertical: 10 },
-    textArea: { height: 80, textAlignVertical: 'top', paddingTop: 12 },
-    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-    errorText: { fontSize: 12, color: serviceRed, flex: 1 },
-    categoryRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
-    categoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5 },
-    categoryChipText: { fontSize: 13, fontWeight: '600' },
-    priceStockRow: { flexDirection: 'row' },
-    saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 14, marginTop: 8 },
-    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    bodyContent: { paddingHorizontal: 16, paddingTop: 8 },
+    imageUploadArea: {
+        height: 180,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        overflow: 'hidden',
+    },
+    previewContainer: { width: '100%', height: '100%' },
+    imagePreview: { width: '100%', height: '100%', resizeMode: 'cover' },
+    editImageOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        height: 48,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    editImageText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+    uploadPlaceholder: { alignItems: 'center', justifyContent: 'center', padding: 16 },
+    uploadIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    uploadTitle: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+    uploadDesc: { fontSize: 11, fontWeight: '600' },
+    formCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 4 },
+    selectorLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, marginBottom: 7, marginLeft: 2 },
+    selectorBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: 48,
+        borderWidth: 1.5,
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        marginBottom: 14,
+    },
+    selectorBtnText: { fontSize: 14, fontWeight: '600' },
+    errorText: { fontSize: 12, color: serviceRed, fontWeight: '600', marginTop: -10, marginBottom: 12, marginLeft: 2 },
+    actionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
+    saveBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 52,
+        borderRadius: 14,
+    },
+    saveBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+    deleteBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        height: 52,
+        paddingHorizontal: 16,
+        borderRadius: 14,
+        borderWidth: 1.5,
+    },
+    deleteBtnText: { fontSize: 14, fontWeight: '800' },
+    btnPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+    // Modal & Source selectors
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        overflow: 'hidden',
+        paddingHorizontal: 16,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+    },
+    modalTitle: { fontSize: 16, fontWeight: '900' },
+    closeBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    pickerItem: { paddingVertical: 16, borderBottomWidth: 1, width: '100%' },
+    pickerItemText: { fontSize: 15, fontWeight: '700' },
+    deleteImageBtn: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    inlineSourceContainer: {
+        width: '100%',
+        alignItems: 'center',
+        padding: 16,
+    },
+    inlineButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+        justifyContent: 'center',
+    },
+    inlineSourceBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1.5,
+    },
+    inlineSourceBtnText: {
+        fontSize: 13,
+        fontWeight: '800',
+    },
 });

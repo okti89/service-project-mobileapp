@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Keyboard, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -108,10 +108,12 @@ const LoginScreen = ({ navigation }) => {
                 {/* Header Section */}
                 <View style={styles.headerContainer}>
                     <View style={[styles.iconWrapper, { backgroundColor: isDark ? colors.primary + '20' : colors.primaryLight }]}>
-                        <MaterialCommunityIcons name="shield-lock-outline" size={60} color={colors.primary} />
+                        <Image style={styles.logo} source={require('../../../assets/logo.png')} />
+
+
                     </View>
                     <Text style={[styles.title, { color: colors.text }]}>Hoş Geldiniz</Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Devam etmek icin giriş yapin</Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Devam etmek için giriş yapın</Text>
                 </View>
 
                 {/* Global Error Banner */}
@@ -196,12 +198,19 @@ const styles = StyleSheet.create({
         marginBottom: 40,
     },
     iconWrapper: {
-        width: 100,
-        height: 100,
+        width: 150,
+        height: 150,
         borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
+    },
+    logo: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+        borderRadius: 30,
+
     },
     title: {
         fontSize: 32,

@@ -33,6 +33,8 @@ const ENDPOINTS = {
     TECHNICIAN: {
         ME: 'technicians/me/',
         LIST: 'technicians/technician-list/',
+        DETAIL: (id) => `technicians/technician/${id}/`,
+        PERMISSIONS: (id) => `technicians/technician/${id}/permissions/`,
         SHIFTS: 'technicians/shifts/',
         SHIFT_START: 'technicians/shifts/start/',
         SHIFT_STOP: 'technicians/shifts/stop/',
@@ -50,6 +52,7 @@ const ENDPOINTS = {
     },
     CUSTOMERS: {
         LIST: 'customers/customer-list/',
+        CREATE: 'customers/customers/',
         DETAIL: (id) => `customers/customers/${id}/`,
     },
     DEVICES: {

@@ -4,21 +4,26 @@ import {
     StyleSheet,
     Text,
     View,
+    Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import { useConfig } from '@/context/ConfigContext';
 
 const CustomSplashScreen = ({ message = 'Yükleniyor', submessage }) => {
     const { colors, isDark } = useTheme();
+    const { config } = useConfig();
+    const appName = config?.name || 'Servis Yönetimi';
 
     const gradientColors = isDark
         ? [colors.surface, colors.background]
         : ['#FFFFFF', '#F5F7FA'];
 
     return (
+
         <View style={styles.container}>
             <LinearGradient
                 colors={gradientColors}
@@ -35,21 +40,27 @@ const CustomSplashScreen = ({ message = 'Yükleniyor', submessage }) => {
                             end={{ x: 1, y: 1 }}
                             style={[styles.logoCircle, { shadowColor: colors.primary }]}
                         >
-                            <MaterialCommunityIcons
-                                name="tools"
-                                size={56}
-                                color="#FFFFFF"
-                            />
+                            {config?.logo ? (
+                                <Image
+                                    source={{ uri: config.logo }}
+                                    style={styles.logoImage}
+                                />
+                            ) : (
+                                <Image
+                                    source={require('../../assets/logo.png')}
+                                    style={styles.logoImage}
+                                />
+                            )}
                         </LinearGradient>
                     </View>
 
                     {/* Metinler */}
                     <View style={styles.textBlock}>
                         <Text style={[styles.appName, { color: colors.text }]}>
-                            Servis Yönetimi
+                            {config?.name || 'Servis Yönetimi'}
                         </Text>
                         <Text style={[styles.tagline, { color: colors.textTertiary }]}>
-                            Saha ekibinizi yöneteceğiniz platform
+                            {config?.description || 'Saha ekibinizi yöneteceğiniz platform'}
                         </Text>
                     </View>
 
@@ -88,12 +99,13 @@ const CustomSplashScreen = ({ message = 'Yükleniyor', submessage }) => {
                             ]}
                         />
                         <Text style={[styles.footerText, { color: colors.textTertiary }]}>
-                            v1.0 • Service Management
+                            Uygulama Yükleniyor...
                         </Text>
                     </View>
                 </View>
             </LinearGradient>
         </View>
+
     );
 };
 
@@ -135,6 +147,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.22,
         shadowRadius: 18,
         elevation: 10,
+    },
+    logoImage: {
+        width: 105,
+        height: 105,
+        borderRadius: 20
     },
     textBlock: {
         alignItems: 'center',
@@ -180,6 +197,7 @@ const styles = StyleSheet.create({
     },
     footer: {
         alignItems: 'center',
+        paddingBottom: 30
     },
     footerBrand: {
         flexDirection: 'row',

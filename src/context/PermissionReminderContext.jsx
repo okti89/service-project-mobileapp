@@ -83,13 +83,6 @@ const checkLocationStatus = async () => {
         const fg = await Location.getForegroundPermissionsAsync();
         if (fg?.status === 'denied') return PERMISSION_STATES.DENIED;
         if (fg?.status === 'granted') {
-            // Foreground granted; check background too
-            try {
-                const bg = await Location.getBackgroundPermissionsAsync();
-                if (bg?.status === 'denied') return PERMISSION_STATES.DENIED;
-            } catch (e) {
-                // ignore
-            }
             return PERMISSION_STATES.GRANTED;
         }
         return PERMISSION_STATES.UNDETERMINED;
@@ -111,8 +104,16 @@ const requestLocation = async () => {
     try {
         const fg = await Location.requestForegroundPermissionsAsync();
         if (fg?.status !== 'granted') return false;
-        const bg = await Location.requestBackgroundPermissionsAsync();
-        return bg?.status === 'granted';
+
+        // Arka plan iznini de iste (kullanıcıya sistem dialogu gösterilir),
+        // ama reddedilse/atlansa bile bunu genel başarısızlık saymıyoruz.
+        try {
+            await Location.requestBackgroundPermissionsAsync();
+        } catch (e) {
+            // ignore
+        }
+
+        return true;
     } catch (e) {
         return false;
     }
@@ -153,6 +154,8 @@ export const PermissionReminderProvider = ({ children }) => {
         statusRef.current = { notification: notificationStatus, location: locationStatus };
     }, [notificationStatus, locationStatus]);
 
+
+
     const refreshStatuses = useCallback(async () => {
         const [n, l] = await Promise.all([checkNotificationStatus(), checkLocationStatus()]);
         setNotificationStatus(n);
@@ -164,6 +167,8 @@ export const PermissionReminderProvider = ({ children }) => {
         await writeStoredState(next);
         return { n, l };
     }, []);
+
+    const refreshStatus = useCallback(async () => refreshStatuses(), [refreshStatuses]);
 
     // Initial status check + interval
     useEffect(() => {
@@ -278,25 +283,36 @@ export const PermissionReminderProvider = ({ children }) => {
         try {
             if (activeModal === 'notification') {
                 const ok = await requestNotification();
-                if (ok) {
-                    await refreshStatuses();
-                    closeModal();
-                } else {
-                    await refreshStatuses();
+                await refreshStatuses();
+                if (!ok) {
+                    await persistDismiss('notification', false);
                 }
+                closeModal();
             } else if (activeModal === 'location') {
                 const ok = await requestLocation();
-                if (ok) {
-                    await refreshStatuses();
-                    closeModal();
-                } else {
-                    await refreshStatuses();
+                await refreshStatuses();
+                if (!ok) {
+                    await persistDismiss('location', false);
                 }
+                closeModal();
             }
         } finally {
             setLoadingAction(false);
         }
-    }, [activeModal, closeModal, refreshStatuses]);
+    }, [activeModal, closeModal, persistDismiss, refreshStatuses]);
+
+
+    const requestNotificationPermission = useCallback(async () => {
+        const granted = await requestNotification();
+        await refreshStatuses();
+        return granted;
+    }, [refreshStatuses]);
+
+    const requestLocationPermission = useCallback(async () => {
+        const granted = await requestLocation();
+        await refreshStatuses();
+        return granted;
+    }, [refreshStatuses]);
 
     const handleLater = useCallback(async () => {
         if (!activeModal) return;
@@ -339,11 +355,25 @@ export const PermissionReminderProvider = ({ children }) => {
             isModalOpen: Boolean(activeModal),
             isLoading: loadingAction,
             refreshStatuses,
+            refreshStatus,
+            requestNotificationPermission,
+            requestLocationPermission,
             forceShow,
             resetDismissed,
             permissionStates: PERMISSION_STATES,
         }),
-        [notificationStatus, locationStatus, activeModal, loadingAction, refreshStatuses, forceShow, resetDismissed]
+        [
+            notificationStatus,
+            locationStatus,
+            activeModal,
+            loadingAction,
+            refreshStatuses,
+            refreshStatus,
+            requestNotificationPermission,
+            requestLocationPermission,
+            forceShow,
+            resetDismissed,
+        ]
     );
 
     return (
@@ -444,3 +474,8 @@ export const usePermissionReminder = () => {
 };
 
 export { PERMISSION_STATES };
+
+
+
+
+
