@@ -372,7 +372,11 @@ export default function HomeScreen({ navigation }) {
     return (
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
             <View style={{ flex: 1, backgroundColor: isDark ? colors.background : '#F8FAFC' }}>
-                <HomeHeader />
+                <HomeHeader
+                    unreadCount={unreadCount || 0}
+                    onNotificationsPress={() => navigation.navigate('Notifications')}
+                    isAdmin={isAdmin}
+                />
                 <ScrollView
                     contentContainerStyle={styles.scrollContainer}
                     showsVerticalScrollIndicator={false}

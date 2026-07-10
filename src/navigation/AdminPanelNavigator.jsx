@@ -24,6 +24,7 @@ import AdminAccountingFormScreen from "@/screens/admin/AdminAccountingFormScreen
 import AdminAccountFormScreen from "@/screens/admin/AdminAccountFormScreen";
 import AdminReportsScreen from "@/screens/admin/AdminReportsScreen";
 import AdminCompanySettingsScreen from "@/screens/admin/AdminCompanySettingsScreen";
+import AdminNotificationsScreen from "@/screens/admin/AdminNotificationsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +55,8 @@ export default function AdminPanelNavigator() {
             <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
             <Stack.Screen name="AdminServices" component={ServicesScreen} />
             <Stack.Screen name="AdminCompanySettings" component={AdminCompanySettingsScreen} />
+            <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
+            <Stack.Screen name="AdminSendNotification" component={AdminNotificationsScreen} />
         </Stack.Navigator>
     );
 }

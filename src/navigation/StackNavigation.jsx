@@ -23,6 +23,7 @@ import TechnicianLocationsScreen from "@/screens/technician/TechnicianLocationsS
 import PayrollScreen from "@/screens/hr/PayrollScreen";
 import PayrollDetailScreen from "@/screens/hr/PayrollDetailScreen";
 import ServiceDetail from "@/screens/services/ServiceDetail";
+import NotificationsScreen from "@/screens/notifications/NotificationsScreen";
 const Stack = createStackNavigator()
 
 const AuthStack = () => {
@@ -93,6 +94,7 @@ const AppStack = () => {
             <Stack.Screen name="TechnicianPayroll" component={PayrollScreen} />
             <Stack.Screen name="TechnicianPayrollDetail" component={PayrollDetailScreen} />
             <Stack.Screen name="ServiceDetail" component={ServiceDetail} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen
                 name="Login"
                 component={LoginScreen}

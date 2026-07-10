@@ -63,6 +63,7 @@ const ENDPOINTS = {
     NOTIFICATIONS: {
         LIST: 'notifications/notifications/',
         DETAIL: (id) => `notifications/notifications/${id}/`,
+        ADMIN_SEND: 'notifications/admin/notifications/send/',
     },
     MAPS: {
         // /maps/geocode/ iki yonludur:
