@@ -24,8 +24,8 @@ import { typography } from '@/theme/typography';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
 
 const FILTERS = [
-    { key: 'all', label: 'Tumu' },
-    { key: 'unread', label: 'Okunmamis' },
+    { key: 'all', label: 'Tümü' },
+    { key: 'unread', label: 'Okunmamış' },
     { key: 'service', label: 'Servis' },
     { key: 'accounting', label: 'Muhasebe' },
 ];
