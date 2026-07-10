@@ -36,13 +36,28 @@ const CustomerCard = ({ customer, onPress, onEdit, navigation }) => {
     const handleWhatsApp = (e) => {
         e.stopPropagation();
         if (!phone) { Alert.alert('Hata', 'Telefon numarası bulunamadı'); return; }
-        Linking.openURL(`https://wa.me/${phone.replace(/\D/g, '')}`);
+        let rawDigits = phone.replace(/\D/g, '');
+        if (rawDigits.startsWith('0')) {
+            rawDigits = '90' + rawDigits.slice(1);
+        } else if (!rawDigits.startsWith('90') && rawDigits.length === 10) {
+            rawDigits = '90' + rawDigits;
+        }
+        Linking.openURL(`https://wa.me/${rawDigits}`);
     };
 
     const handleCall = (e) => {
         e.stopPropagation();
         if (!phone) { Alert.alert('Hata', 'Telefon numarası bulunamadı'); return; }
-        Linking.openURL(`tel:${phone.replace(/\D/g, '')}`);
+        let rawDigits = phone.replace(/\D/g, '');
+        // format for dial protocol
+        if (rawDigits.startsWith('90') && rawDigits.length === 12) {
+            rawDigits = '+' + rawDigits;
+        } else if (rawDigits.length === 10) {
+            rawDigits = '+90' + rawDigits;
+        } else if (rawDigits.startsWith('0') && rawDigits.length === 11) {
+            rawDigits = '+90' + rawDigits.slice(1);
+        }
+        Linking.openURL(`tel:${rawDigits}`);
     };
 
     const handleLocation = (e) => {

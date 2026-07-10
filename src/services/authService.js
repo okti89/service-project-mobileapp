@@ -20,7 +20,7 @@ const normalizePhoneTR = (raw) => {
     if (local.length !== 10) {
         return raw;
     }
-    return `+90${local}`;
+    return `0${local}`;
 };
 
 

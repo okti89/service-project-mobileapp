@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
     forwardRef,
     useCallback,
     useEffect,
@@ -20,6 +20,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import { sp } from '@/theme/scale';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 const getInitials = (name = '') => {
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
     container: {
         paddingHorizontal: spacing.gutter,
         paddingTop: spacing.s,
-        paddingBottom: spacing['3xl'],
+        paddingBottom: sp(40),
     },
     handle: {
         alignSelf: 'center',

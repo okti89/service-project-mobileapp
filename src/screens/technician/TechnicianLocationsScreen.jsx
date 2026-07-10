@@ -472,7 +472,8 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
     );
 });
 
-export default function TechnicianLocationsScreen({ navigation }) {
+export default function TechnicianLocationsScreen({ navigation, route }) {
+    const routeTechnicianId = route?.params?.technicianId || route?.params?.id || route?.params?.technician?.id || null;
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
     const mapRef = useRef(null);
@@ -516,7 +517,10 @@ export default function TechnicianLocationsScreen({ navigation }) {
                 );
                 setTechnicians(sorted);
                 if (sorted.length > 0) {
-                    setSelectedTechnician(sorted[0]);
+                    const matched = routeTechnicianId 
+                        ? sorted.find(t => String(t.id) === String(routeTechnicianId))
+                        : null;
+                    setSelectedTechnician(matched || sorted[0]);
                 }
             } catch (err) {
                 console.error('Failed to fetch technicians:', err);

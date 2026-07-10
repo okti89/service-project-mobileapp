@@ -87,6 +87,25 @@ const ENDPOINTS = {
         GENERAL_PDF: 'reports/general/',
         TECHNICIAN_PDF: 'reports/technician/',
     },
+    HR: {
+        // Admin
+        PAYROLLS: 'hr/payrolls/',
+        PAYROLL_DETAIL: (id) => `hr/payrolls/${id}/`,
+        PAYROLL_PDF: (id) => `hr/payrolls/${id}/pdf/`,
+        PAYROLL_SEND_NOTIFICATION: (id) => `hr/payrolls/${id}/send_notification/`,
+        PAYROLL_COMPONENTS: 'hr/payroll-components/',
+        PAYROLL_TEMPLATES: 'hr/payroll-templates/',
+        COMPENSATIONS: 'hr/technician-compensations/',
+        COMPENSATION_DETAIL: (id) => `hr/technician-compensations/${id}/`,
+        // Technician (self)
+        MY_PAYROLLS: 'hr/me/payrolls/',
+        MY_PAYROLL_PDF: (id) => `hr/me/payrolls/${id}/pdf/`,
+    },
+    ACCOUNTING: {
+        ACCOUNTS: 'accounting/accounts/',
+        CATEGORIES: 'accounting/transaction-categories/',
+        TRANSACTIONS: 'accounting/transactions/',
+    },
 };
 
 export default ENDPOINTS;

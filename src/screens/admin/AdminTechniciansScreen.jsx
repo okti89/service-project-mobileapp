@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -18,7 +18,7 @@ import {
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -316,7 +316,9 @@ export default function AdminTechniciansScreen() {
     const closeResultModal = useCallback(() => setResultModal(p => ({ ...p, visible: false })), []);
 
     const fetchTechnicians = useCallback(async () => {
-        setLoading(true);
+        if (technicians.length === 0) {
+            setLoading(true);
+        }
         try {
             const res = await api.get(ENDPOINTS.TECHNICIAN.LIST);
             const rows = Array.isArray(res?.data) ? res.data : (res?.data?.results || []);
@@ -329,7 +331,7 @@ export default function AdminTechniciansScreen() {
         }
     }, []);
 
-    React.useEffect(() => { fetchTechnicians(); }, [fetchTechnicians]);
+    useEffect(() => { fetchTechnicians(); }, [fetchTechnicians]);
 
     const handleRefresh = useCallback(() => {
         setRefreshing(true);
@@ -410,6 +412,17 @@ export default function AdminTechniciansScreen() {
     const handleNavigate = useCallback((action, tech) => {
         if (action === 'view' || action === 'detail') {
             navigation.navigate('AdminTechnicianDetail', { technicianId: tech.id });
+        } else if (action === 'edit') {
+            navigation.navigate('AdminEditUser', {
+                user: tech?.user,
+                onSuccess: (updatedUser) => {
+                    setTechnicians(prev => prev.map(t =>
+                        t.user?.id === updatedUser.id
+                            ? { ...t, user: { ...t.user, ...updatedUser } }
+                            : t
+                    ));
+                },
+            });
         } else if (action === 'locations') {
             navigation.navigate('TechnicianLocations', { technicianId: tech.id });
         } else if (action === 'shifts') {

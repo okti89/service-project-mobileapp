@@ -20,6 +20,9 @@ import ResetCodeScreen from "@/screens/auth/ResetCodeScreen";
 import AdminTechniciansScreen from "@/screens/admin/AdminTechniciansScreen";
 import ApprovalPendingUsersScreen from "@/screens/admin/ApprovalPendingUsersScreen";
 import TechnicianLocationsScreen from "@/screens/technician/TechnicianLocationsScreen";
+import PayrollScreen from "@/screens/hr/PayrollScreen";
+import PayrollDetailScreen from "@/screens/hr/PayrollDetailScreen";
+import ServiceDetail from "@/screens/services/ServiceDetail";
 const Stack = createStackNavigator()
 
 const AuthStack = () => {
@@ -87,6 +90,9 @@ const AppStack = () => {
             <Stack.Screen name="AdminTechnicians" component={AdminTechniciansScreen} />
             <Stack.Screen name="AdminPendingUsers" component={ApprovalPendingUsersScreen} />
             <Stack.Screen name="TechnicianLocations" component={TechnicianLocationsScreen} />
+            <Stack.Screen name="TechnicianPayroll" component={PayrollScreen} />
+            <Stack.Screen name="TechnicianPayrollDetail" component={PayrollDetailScreen} />
+            <Stack.Screen name="ServiceDetail" component={ServiceDetail} />
             <Stack.Screen
                 name="Login"
                 component={LoginScreen}

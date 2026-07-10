@@ -37,7 +37,7 @@ const normalizePhoneTR = (raw) => {
     if (local.startsWith('0') && local.length === 11) local = local.slice(1);
     if (local.length > 10) local = local.slice(-10);
     if (local.length !== 10) return raw;
-    return `+90${local}`;
+    return `0${local}`;
 };
 
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
@@ -264,7 +264,7 @@ export default function AdminCreateUserScreen({ navigation }) {
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 autoCorrect={false}
-                                placeholder="ornek@firma.com"
+                                placeholder="örnek@gmail.com"
                             />
                             <CustomInput
                                 label="Telefon"

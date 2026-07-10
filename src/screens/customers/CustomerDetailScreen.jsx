@@ -105,7 +105,15 @@ export default function CustomerDetailScreen({ navigation, route }) {
             Alert.alert('Hata', 'Telefon numarası bulunamadı');
             return;
         }
-        Linking.openURL(`tel:${customer.phone_number.replace(/\D/g, '')}`).catch(() => {
+        let rawDigits = customer.phone_number.replace(/\D/g, '');
+        if (rawDigits.startsWith('90') && rawDigits.length === 12) {
+            rawDigits = '+' + rawDigits;
+        } else if (rawDigits.length === 10) {
+            rawDigits = '+90' + rawDigits;
+        } else if (rawDigits.startsWith('0') && rawDigits.length === 11) {
+            rawDigits = '+90' + rawDigits.slice(1);
+        }
+        Linking.openURL(`tel:${rawDigits}`).catch(() => {
             Alert.alert('Hata', 'Arama başlatılamadı');
         });
     };
@@ -115,7 +123,13 @@ export default function CustomerDetailScreen({ navigation, route }) {
             Alert.alert('Hata', 'Telefon numarası bulunamadı');
             return;
         }
-        Linking.openURL(`https://wa.me/${customer.phone_number.replace(/\D/g, '')}`).catch(() => {
+        let rawDigits = customer.phone_number.replace(/\D/g, '');
+        if (rawDigits.startsWith('0')) {
+            rawDigits = '90' + rawDigits.slice(1);
+        } else if (!rawDigits.startsWith('90') && rawDigits.length === 10) {
+            rawDigits = '90' + rawDigits;
+        }
+        Linking.openURL(`https://wa.me/${rawDigits}`).catch(() => {
             Alert.alert('Hata', 'WhatsApp açılamadı');
         });
     };

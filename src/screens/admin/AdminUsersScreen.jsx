@@ -130,6 +130,7 @@ function UserCard({
     onRestore,
     onCall,
     onWhatsApp,
+    onEdit,
 }) {
     const statusKey = getUserStatusKey(user);
     const statusMeta = STATUS_META[statusKey] || STATUS_META.approved;
@@ -196,6 +197,22 @@ function UserCard({
 
             {/* Aksiyonlar */}
             <View style={styles.actionRow}>
+                {/* Düzenle Butonu */}
+                <Pressable
+                    onPress={() => onEdit?.(user)}
+                    style={({ pressed }) => [
+                        styles.actionBtn,
+                        {
+                            borderColor: `${colors.primary}40`,
+                            backgroundColor: isDark ? `${colors.primary}18` : '#EFF6FF',
+                        },
+                        pressed && { opacity: 0.7 },
+                    ]}
+                >
+                    <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.primary} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary }]}>Düzenle</Text>
+                </Pressable>
+
                 {/* WhatsApp + Ara */}
                 {user?.phone_number ? (
                     <>
@@ -361,7 +378,9 @@ export default function AdminUsersScreen({ navigation }) {
     // ── Veri çekme ────────────────────────────────────────────────────────────
 
     const fetchUsers = useCallback(async () => {
-        setLoading(true);
+        if (users.length === 0) {
+            setLoading(true);
+        }
         try {
             const response = await api.get(ENDPOINTS.AUTH.USER_LIST, {
                 params: { include_inactive: 'true' },
@@ -379,7 +398,7 @@ export default function AdminUsersScreen({ navigation }) {
     }, []);
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
-    const handleRefresh = useCallback(() => { setRefreshing(true); fetchUsers(true); }, [fetchUsers]);
+    const handleRefresh = useCallback(() => { setRefreshing(true); fetchUsers(); }, [fetchUsers]);
 
     // ── İstatistikler ─────────────────────────────────────────────────────────
 
@@ -546,8 +565,14 @@ export default function AdminUsersScreen({ navigation }) {
             onRestore={confirmRestore}
             onCall={handleCall}
             onWhatsApp={handleWhatsApp}
+            onEdit={(u) => navigation.navigate('AdminEditUser', {
+                user: u,
+                onSuccess: (updatedUser) => {
+                    setUsers(prev => prev.map(p => p.id === updatedUser.id ? updatedUser : p));
+                },
+            })}
         />
-    ), [colors, isDark, busyUserId, confirmApprove, confirmReject, confirmDeactivate, confirmRestore, handleCall, handleWhatsApp]);
+    ), [colors, isDark, busyUserId, confirmApprove, confirmReject, confirmDeactivate, confirmRestore, handleCall, handleWhatsApp, navigation]);
 
     const ListHeader = useMemo(() => (
         <>

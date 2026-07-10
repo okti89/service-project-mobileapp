@@ -63,11 +63,10 @@ export default function App() {
       try {
         // Fonts
         await Font.loadAsync({
-          InterRegular: require('./assets/fonts/Inter_18pt-Bold.ttf'),
-          InterMedium: require('./assets/fonts/Inter_18pt-Bold.ttf'),
-          InterSemiBold: require('./assets/fonts/Inter_18pt-Bold.ttf'),
-          InterBold: require('./assets/fonts/Inter_18pt-Bold.ttf'),
-
+          'Inter-Regular': require('./assets/fonts/Inter_18pt-Regular.ttf'),
+          'Inter-Medium': require('./assets/fonts/Inter_18pt-Medium.ttf'),
+          'Inter-SemiBold': require('./assets/fonts/Inter_18pt-SemiBold.ttf'),
+          'Inter-Bold': require('./assets/fonts/Inter_18pt-Bold.ttf'),
         });
 
         // OTA Update Control
