@@ -323,7 +323,7 @@ export default function NotificationsScreen() {
         <View style={styles.topArea}>
             {counts.unread > 0 ? (
                 <Pressable onPress={markAllAsRead} style={styles.markAllWrap}>
-                    <Text style={[styles.markAllText, { color: colors.primary }]}>Tumunu Okundu Isaretle</Text>
+                    <Text style={[styles.markAllText, { color: colors.primary }]}>Tümünü Okundu İşaretle</Text>
                 </Pressable>
             ) : null}
 
