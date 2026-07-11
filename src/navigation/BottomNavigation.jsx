@@ -10,7 +10,7 @@ import HomeScreen from "@/screens/home/HomeScreen";
 import DevScreen from "@/screens/dev/DevScreen";
 import AdminPanelNavigator from "./AdminPanelNavigator";
 import ProfileScreen from "@/screens/profile/ProfileScreen";
-
+import ServicesScreen from "@/screens/services/ServicesScreen";
 const Tab = createBottomTabNavigator();
 
 const ICON_MAP = {
@@ -85,6 +85,7 @@ export default function BottomNavigation() {
 
             }}>
             <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Ana Sayfa', tabBarShowLabel: true }} />
+            <Tab.Screen name="Services" component={ServicesScreen} options={{ title: 'Servisler', tabBarShowLabel: true }} />
             <Tab.Screen
                 name="AdminPanel"
                 component={AdminPanelNavigator}

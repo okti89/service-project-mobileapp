@@ -32,6 +32,8 @@ import ProfileChangePasswordScreen from "@/screens/profile/ProfileChangePassword
 import ProfilePersonalInfoScreen from "@/screens/profile/ProfilePersonalInfoScreen";
 import ProfilePerformanceScreen from "@/screens/profile/ProfilePerformanceScreen";
 import ProfileMyShiftsScreen from "@/screens/profile/ProfileMyShiftsScreen";
+import CreateServiceScreen from "@/screens/services/CreateServiceScreen";
+
 
 const Stack = createStackNavigator();
 
@@ -89,6 +91,7 @@ const AppStack = () => {
             <Stack.Screen name="ProfilePersonalInfo" component={ProfilePersonalInfoScreen} />
             <Stack.Screen name="ProfilePerformance" component={ProfilePerformanceScreen} />
             <Stack.Screen name="ProfileMyShifts" component={ProfileMyShiftsScreen} />
+            <Stack.Screen name="CreateService" component={CreateServiceScreen} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'GiriÅŸ Yap', headerShown: false }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'KayÄ±t Ol', headerShown: false }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Åifremi Unuttum', headerShown: false }} />

@@ -119,8 +119,8 @@ const AccountDeactivatedScreen = () => {
     const isRejected = String(userInfo?.approval_status || '').toLowerCase() === 'rejected';
 
     const title = isRejected ? "Başvurunuz Onaylanmadı" : "Hesabınız Askıya Alındı";
-    const description = isRejected 
-        ? "Yaptığınız hesap başvurusu yönetici tarafından uygun görülmemiş ve onaylanmamıştır." 
+    const description = isRejected
+        ? "Yaptığınız hesap başvurusu yönetici tarafından uygun görülmemiş ve onaylanmamıştır."
         : "Hesabınız yönetici tarafından geçici veya kalıcı olarak pasifleştirilmiştir.";
 
     return (
@@ -146,11 +146,8 @@ const AccountDeactivatedScreen = () => {
 
                 {/* Illustration */}
                 <View style={styles.illustrationWrap}>
-                    <Image
-                        source={require('../../../assets/error_illustration.png')}
-                        style={styles.illustration}
-                        resizeMode="contain"
-                    />
+
+                    <MaterialCommunityIcons name="account-cancel" size={64} color={colors.error} />
                 </View>
 
                 {/* Title & Message */}
@@ -183,12 +180,12 @@ const AccountDeactivatedScreen = () => {
                         <MaterialCommunityIcons name="headset" size={20} color={colors.primary} />
                         <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>Destek ile İletişim</Text>
                     </Pressable>
-                    
+
                     {/* Logout Red Button */}
-                    <Pressable 
-                        onPress={logout} 
+                    <Pressable
+                        onPress={logout}
                         style={({ pressed }) => [
-                            styles.logoutBtn, 
+                            styles.logoutBtn,
                             { borderColor: colors.error },
                             pressed && { opacity: 0.6 }
                         ]}
@@ -243,7 +240,7 @@ const styles = StyleSheet.create({
     },
     illustrationWrap: {
         width: '100%',
-        height: 220,
+        height: 120,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 24,

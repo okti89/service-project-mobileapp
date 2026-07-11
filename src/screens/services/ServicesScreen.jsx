@@ -204,7 +204,19 @@ export default function ServicesScreen({ navigation }) {
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
             <View style={{ flex: 1, backgroundColor: isDark ? colors.background : '#F8FAFC' }}>
                 {/* Header */}
-                <Header title="Servis Operasyonları" showBack={true} />
+                <Header
+                    title="Servis Operasyonları"
+                    showBack={true}
+                    rightActions={[
+                        {
+                            icon: 'plus',
+                            onPress: () => navigation.navigate('CreateService', {
+                                onSuccess: () => fetchServices(),
+                            }),
+                            accessibilityLabel: 'Yeni Servis Ekle',
+                        }
+                    ]}
+                />
 
                 {/* Day navigation picker */}
                 <View style={styles.dateSelectorRow}>
@@ -300,7 +312,11 @@ export default function ServicesScreen({ navigation }) {
                     <FlatList
                         data={services}
                         keyExtractor={(item) => String(item.id)}
-                        renderItem={({ item, index }) => <ServiceCard item={item} index={index} />}
+                        renderItem={({ item, index }) => (
+                            <Pressable onPress={() => navigation.navigate('ServiceDetail', { serviceId: item.id, service: item })}>
+                                <ServiceCard item={item} index={index} />
+                            </Pressable>
+                        )}
                         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
                         refreshControl={
                             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[serviceBlue]} />
