@@ -55,7 +55,7 @@ export default function BottomNavigation() {
         borderWidth: 1,
         borderColor: colors.border,
         backgroundColor: colors.surface,
-        height: 56 + bottomInset,
+        height: 65 + bottomInset,
         elevation: 12,
         overflow: 'visible'
     }

@@ -21,6 +21,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { useConfig } from "@/context/ConfigContext";
 import { useToast } from '@/context/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -626,6 +627,15 @@ export default function HomeScreen({ navigation }) {
                                                     {item.customer_address || 'Adres belirtilmemiş'}
                                                 </Text>
                                             </View>
+
+                                            {item.technician_name && (
+                                                <View style={[styles.locationRow, { marginTop: 4 }]}>
+                                                    <MaterialCommunityIcons name="account-hard-hat-outline" size={14} color={colors.textTertiary} />
+                                                    <Text style={[styles.locationText, { color: colors.textTertiary }]} numberOfLines={1}>
+                                                        {item.technician_name}
+                                                    </Text>
+                                                </View>
+                                            )}
                                         </View>
 
                                         <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} style={styles.chevron} />
@@ -810,9 +820,9 @@ export default function HomeScreen({ navigation }) {
                     ref={actionsSheetRef}
                     visible={actionsSheetVisible}
                     onClose={() => setActionsSheetVisible(false)}
-                    snapPoints={['50%']}
+                    snapPoints={['60%']}
                 >
-                    <View style={styles.sheetContainer}>
+                    <BottomSheetScrollView contentContainerStyle={styles.sheetContainer}>
                         <View style={styles.sheetHeader}>
                             <MaterialCommunityIcons name="tools" size={28} color="#0066CC" />
                             <Text style={[styles.sheetTitle, { color: colors.text }]}>Hızlı İşlemler</Text>
@@ -821,63 +831,133 @@ export default function HomeScreen({ navigation }) {
                             {selectedService?.customer_full_name} için yapmak istediğiniz işlemi seçin:
                         </Text>
 
-                        <View style={{ gap: sp(10), marginTop: sp(10) }}>
+                        <View style={{ gap: sp(10), marginTop: sp(10), paddingBottom: sp(30) }}>
                             <Pressable
-                                style={({ pressed }) => [styles.cancelBtn, { height: sp(48), flexDirection: 'row', gap: sp(8), backgroundColor: '#EFF6FF', borderColor: '#DBEAFE', opacity: pressed ? 0.8 : 1 }]}
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
                                     navigation.navigate('ServiceDetail', { serviceId: selectedService.id });
                                 }}
                             >
-                                <MaterialCommunityIcons name="eye-outline" size={20} color="#0066CC" />
-                                <Text style={{ color: '#0066CC', fontWeight: '800' }}>Detay Sayfasına Git</Text>
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#2563EB1A' }]}>
+                                    <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>Detay Sayfasına Git</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Servisin tüm detaylarını görüntüle.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
 
                             <Pressable
-                                style={({ pressed }) => [styles.cancelBtn, { height: sp(48), flexDirection: 'row', gap: sp(8), opacity: pressed ? 0.8 : 1 }]}
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
                                     navigation.navigate('ServiceDetail', { serviceId: selectedService.id, focus: 'technician' });
                                 }}
                             >
-                                <MaterialCommunityIcons name="account-edit-outline" size={20} color={colors.text} />
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>Teknisyen Değiştir</Text>
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#8B5CF61A' }]}>
+                                    <MaterialCommunityIcons name="account-edit-outline" size={20} color="#8B5CF6" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>Teknisyen Değiştir</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Servise atanan teknisyeni güncelle.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
 
                             <Pressable
-                                style={({ pressed }) => [styles.cancelBtn, { height: sp(48), flexDirection: 'row', gap: sp(8), opacity: pressed ? 0.8 : 1 }]}
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
                                     navigation.navigate('ServiceDetail', { serviceId: selectedService.id, focus: 'status' });
                                 }}
                             >
-                                <MaterialCommunityIcons name="progress-clock" size={20} color={colors.text} />
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>Servis Durumu Değiştir</Text>
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#F59E0B1A' }]}>
+                                    <MaterialCommunityIcons name="progress-clock" size={20} color="#F59E0B" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>Durum Güncelle</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Servisin anlık durumunu değiştir.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
 
                             <Pressable
-                                style={({ pressed }) => [styles.cancelBtn, { height: sp(48), flexDirection: 'row', gap: sp(8), opacity: pressed ? 0.8 : 1 }]}
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
                                     handleCallCustomer(selectedService?.customer_phone);
                                 }}
                             >
-                                <MaterialCommunityIcons name="phone" size={20} color={colors.text} />
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>Müşteriyi Ara</Text>
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#10B9811A' }]}>
+                                    <MaterialCommunityIcons name="phone-outline" size={20} color="#10B981" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>Müşteriyi Ara</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Müşteri ile telefon görüşmesi başlat.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
 
                             <Pressable
-                                style={({ pressed }) => [styles.cancelBtn, { height: sp(48), flexDirection: 'row', gap: sp(8), opacity: pressed ? 0.8 : 1 }]}
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
+                                onPress={() => {
+                                    setActionsSheetVisible(false);
+                                    handleWhatsAppTracking(
+                                        selectedService?.customer_phone,
+                                        selectedService?.customer_full_name,
+                                        selectedService?.id,
+                                        selectedService?.service_status
+                                    );
+                                }}
+                            >
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#22C55E1A' }]}>
+                                    <MaterialCommunityIcons name="whatsapp" size={20} color="#22C55E" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>WhatsApp ile Bilgi Ver</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Durum bilgisini WhatsApp'tan ilet.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                            </Pressable>
+
+                            <Pressable
+                                style={({ pressed }) => [
+                                    styles.actionOption,
+                                    { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
                                     handleNavigateCustomer(selectedService?.customer_address);
                                 }}
                             >
-                                <MaterialCommunityIcons name="navigation-variant" size={20} color={colors.text} />
-                                <Text style={{ color: colors.text, fontWeight: '800' }}>Haritada Yol Tarifi Al</Text>
+                                <View style={[styles.actionOptionIcon, { backgroundColor: '#EC48991A' }]}>
+                                    <MaterialCommunityIcons name="navigation-variant-outline" size={20} color="#EC4899" />
+                                </View>
+                                <View style={styles.actionOptionBody}>
+                                    <Text style={[styles.actionOptionTitle, { color: colors.text }]}>Yol Tarifi Al</Text>
+                                    <Text style={[styles.actionOptionText, { color: colors.textSecondary }]}>Harita üzerinde adrese git.</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
                         </View>
-                    </View>
+                    </BottomSheetScrollView>
                 </AppBottomSheet>
             </View>
         </WrapperContainer>
@@ -1367,6 +1447,35 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: sp(12),
         marginTop: sp(8),
+    },
+    actionOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(12),
+        borderWidth: 1,
+        borderRadius: sp(16),
+        paddingHorizontal: sp(16),
+        paddingVertical: sp(14),
+    },
+    actionOptionIcon: {
+        width: sp(40),
+        height: sp(40),
+        borderRadius: sp(12),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionOptionBody: {
+        flex: 1,
+        gap: sp(2),
+    },
+    actionOptionTitle: {
+        fontSize: fs(14),
+        fontWeight: '700',
+    },
+    actionOptionText: {
+        fontSize: fs(12),
+        fontWeight: '500',
+        lineHeight: sp(16),
     },
     cancelBtn: {
         flex: 1,

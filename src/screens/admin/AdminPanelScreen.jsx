@@ -152,6 +152,14 @@ const PERMISSION_ITEM_MAP = {
     can_manage_settings: ['company-settings'],
 };
 
+const MENU_CATEGORIES = [
+    { key: 'users', label: 'Kullanıcı ve Ekip Yönetimi', items: ['users-list', 'users-pending', 'technicians-list'] },
+    { key: 'field', label: 'Saha ve Operasyon', items: ['technicians-locations', 'technicians-shifts', 'technicians-leaves', 'services'] },
+    { key: 'finance', label: 'Finans ve Muhasebe', items: ['finance-payroll', 'finance-accounting'] },
+    { key: 'customer_inventory', label: 'Müşteri ve Envanter', items: ['customers-list', 'inventory'] },
+    { key: 'system', label: 'Sistem Yönetimi', items: ['notifications', 'reports', 'company-settings'] }
+];
+
 const MENU_ITEMS_BY_KEY = ADMIN_MENU_ITEMS.reduce((acc, item) => {
     acc[item.key] = item;
     return acc;
@@ -166,7 +174,7 @@ const QUICK_ACTIONS = [
 ];
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
-function QuickAction({ icon, label, color, onPress, colors }) {
+function QuickAction({ icon, label, color, badge, onPress, colors }) {
     return (
         <Pressable
             onPress={onPress}
@@ -177,8 +185,13 @@ function QuickAction({ icon, label, color, onPress, colors }) {
         >
             <View style={[styles.quickActionIcon, { backgroundColor: `${color}18` }]}>
                 <MaterialCommunityIcons name={icon} size={26} color={color} />
+                {badge > 0 ? (
+                    <View style={[styles.badge, { backgroundColor: serviceRed, position: 'absolute', top: -5, right: -5 }]}>
+                        <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                    </View>
+                ) : null}
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.textSecondary }]}>{label}</Text>
+            <Text style={[styles.quickActionLabel, { color: colors.textSecondary, textAlign: 'center' }]} numberOfLines={2}>{label}</Text>
         </Pressable>
     );
 }
@@ -218,6 +231,7 @@ export default function AdminPanelScreen({ navigation }) {
     const { isAdmin, mobilePermissions, userInfo } = useAuth();
     const { unreadCount = 0 } = useNotifications() || {};
     const [pendingCount, setPendingCount] = useState(0);
+    const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
 
     // User display info
     const firstName = userInfo?.first_name || '';
@@ -263,6 +277,13 @@ export default function AdminPanelScreen({ navigation }) {
         () => baseItems.map((item) => ({ ...item, badge: item.badgeKey === 'pendingUsers' ? pendingCount : 0 })),
         [baseItems, pendingCount]
     );
+
+    const groupedMenu = useMemo(() => {
+        return MENU_CATEGORIES.map(cat => {
+            const items = cat.items.map(key => menuItems.find(mi => mi.key === key)).filter(Boolean);
+            return { ...cat, items };
+        }).filter(cat => cat.items.length > 0);
+    }, [menuItems]);
 
     return (
         <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -324,22 +345,57 @@ export default function AdminPanelScreen({ navigation }) {
                 </View>
 
                 {/* ─── Yönetim Modülleri ─── */}
-                <View style={styles.sectionHeader}>
+                <View style={[styles.sectionHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }]}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>Yönetim Modülleri</Text>
+                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#F1F5F9', borderRadius: 8, padding: 2 }}>
+                        <Pressable onPress={() => setViewMode('grid')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'grid' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
+                            <MaterialCommunityIcons name="view-grid-outline" size={20} color={viewMode === 'grid' ? colors.text : colors.textSecondary} />
+                        </Pressable>
+                        <Pressable onPress={() => setViewMode('list')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'list' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
+                            <MaterialCommunityIcons name="view-list-outline" size={20} color={viewMode === 'list' ? colors.text : colors.textSecondary} />
+                        </Pressable>
+                    </View>
                 </View>
 
-                {menuItems.length > 0 ? (
-                    menuItems.map((item) => (
-                        <MenuItem
-                            key={item.key}
-                            icon={item.icon}
-                            label={item.label}
-                            description={item.description}
-                            color={item.color}
-                            badge={item.badge}
-                            onPress={() => navigation.navigate(item.route)}
-                            colors={colors}
-                        />
+                {groupedMenu.length > 0 ? (
+                    groupedMenu.map((group, groupIdx) => (
+                        <View key={group.key} style={{ marginBottom: 20 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8, marginLeft: 4, textTransform: 'uppercase' }}>
+                                {group.label}
+                            </Text>
+
+                            {viewMode === 'grid' ? (
+                                <View style={[styles.quickActionsGrid, { backgroundColor: colors.surface, borderColor: colors.border, flexWrap: 'wrap', marginBottom: 0 }]}>
+                                    {group.items.map((item, index) => (
+                                        <View key={item.key} style={{ width: '25%' }}>
+                                            <QuickAction
+                                                icon={item.icon}
+                                                label={item.label}
+                                                color={item.color}
+                                                badge={item.badge}
+                                                onPress={() => navigation.navigate(item.route)}
+                                                colors={colors}
+                                            />
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : (
+                                <View style={{ gap: 8 }}>
+                                    {group.items.map(item => (
+                                        <MenuItem
+                                            key={item.key}
+                                            icon={item.icon}
+                                            label={item.label}
+                                            description={item.description}
+                                            color={item.color}
+                                            badge={item.badge}
+                                            onPress={() => navigation.navigate(item.route)}
+                                            colors={colors}
+                                        />
+                                    ))}
+                                </View>
+                            )}
+                        </View>
                     ))
                 ) : (
                     <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>

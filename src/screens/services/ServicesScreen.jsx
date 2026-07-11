@@ -113,6 +113,14 @@ const ServiceCard = ({ item, index }) => {
                         {item.customer_address || 'Adres belirtilmemiş'}
                     </Text>
                 </View>
+                {item.technician_name && (
+                    <View style={[styles.addressRow, { marginTop: 4 }]}>
+                        <MaterialCommunityIcons name="account-hard-hat-outline" size={14} color={colors.textTertiary} />
+                        <Text style={[styles.addressText, { color: colors.textTertiary }]} numberOfLines={1}>
+                            {item.technician_name}
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
@@ -145,6 +153,7 @@ export default function ServicesScreen({ navigation }) {
     const calendarPickerRef = useRef(null);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [activeTab, setActiveTab] = useState('my'); // 'my' or 'all'
+    const [viewMode, setViewMode] = useState('day'); // 'day', 'month', 'year'
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -152,14 +161,14 @@ export default function ServicesScreen({ navigation }) {
     const fetchServices = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);
         try {
-            const formattedDate = dayjs(selectedDate).format('YYYY-MM-DD');
+            const startStr = dayjs(selectedDate).startOf(viewMode).format('YYYY-MM-DD');
+            const endStr = dayjs(selectedDate).endOf(viewMode).format('YYYY-MM-DD');
+            
             const endpoint = (isAdmin && activeTab === 'all')
                 ? ENDPOINTS.SERVICES.ADMIN_LIST
                 : ENDPOINTS.SERVICES.TECHNICIAN_LIST;
 
-            const params = (isAdmin && activeTab === 'all')
-                ? { start_date: formattedDate, end_date: formattedDate }
-                : { date: formattedDate };
+            const params = { start_date: startStr, end_date: endStr };
 
             const res = await api.get(endpoint, { params });
             setServices(Array.isArray(res?.data) ? res.data : []);
@@ -169,26 +178,18 @@ export default function ServicesScreen({ navigation }) {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedDate, activeTab, isAdmin]);
+    }, [selectedDate, activeTab, viewMode, isAdmin]);
 
     useEffect(() => {
         fetchServices();
     }, [fetchServices]);
 
-    const handlePrevDay = () => {
-        setSelectedDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setDate(newDate.getDate() - 1);
-            return newDate;
-        });
+    const handlePrev = () => {
+        setSelectedDate(prev => dayjs(prev).subtract(1, viewMode).toDate());
     };
 
-    const handleNextDay = () => {
-        setSelectedDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setDate(newDate.getDate() + 1);
-            return newDate;
-        });
+    const handleNext = () => {
+        setSelectedDate(prev => dayjs(prev).add(1, viewMode).toDate());
     };
 
     const handleRefresh = () => {
@@ -196,9 +197,14 @@ export default function ServicesScreen({ navigation }) {
         fetchServices(true);
     };
 
-    const dateLabel = dayjs(selectedDate).isSame(dayjs(), 'day')
-        ? 'Bugün'
-        : dayjs(selectedDate).format('D MMMM YYYY');
+    let dateLabel = '';
+    if (viewMode === 'day') {
+        dateLabel = dayjs(selectedDate).isSame(dayjs(), 'day') ? 'Bugün' : dayjs(selectedDate).format('D MMMM YYYY');
+    } else if (viewMode === 'month') {
+        dateLabel = dayjs(selectedDate).format('MMMM YYYY');
+    } else {
+        dateLabel = dayjs(selectedDate).format('YYYY');
+    }
 
     return (
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
@@ -218,90 +224,67 @@ export default function ServicesScreen({ navigation }) {
                     ]}
                 />
 
-                {/* Day navigation picker */}
-                <View style={styles.dateSelectorRow}>
-                    <Pressable
-                        onPress={handlePrevDay}
-                        style={({ pressed }) => [
-                            styles.dateNavBtn,
-                            {
-                                backgroundColor: isDark ? colors.surface : '#FFFFFF',
-                                borderColor: colors.border,
-                                opacity: pressed ? 0.75 : 1,
-                            },
-                        ]}
-                    >
-                        <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
-                    </Pressable>
-
-                    <Pressable
-                        onPress={() => calendarPickerRef.current?.present()}
-                        style={({ pressed }) => [
-                            styles.dateCenterBtn,
-                            {
-                                backgroundColor: isDark ? colors.surface : '#FFFFFF',
-                                borderColor: colors.border,
-                                opacity: pressed ? 0.85 : 1,
-                            },
-                        ]}
-                    >
-                        <MaterialCommunityIcons name="calendar-outline" size={16} color={serviceBlue} style={{ marginRight: 6 }} />
-                        <Text style={[styles.dateCenterText, { color: colors.text }]}>{dateLabel}</Text>
-                        <MaterialCommunityIcons name="chevron-down" size={16} color={colors.textSecondary} style={{ marginLeft: 4 }} />
-                    </Pressable>
-
-                    <Pressable
-                        onPress={handleNextDay}
-                        style={({ pressed }) => [
-                            styles.dateNavBtn,
-                            {
-                                backgroundColor: isDark ? colors.surface : '#FFFFFF',
-                                borderColor: colors.border,
-                                opacity: pressed ? 0.75 : 1,
-                            },
-                        ]}
-                    >
-                        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
-                    </Pressable>
-                </View>
-
-                {/* Tabs if Admin */}
+                {/* Modern Tabs */}
                 {isAdmin && (
-                    <View style={styles.tabsContainer}>
+                    <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
                         <Pressable
                             onPress={() => setActiveTab('my')}
-                            style={[
-                                styles.tabBtn,
-                                activeTab === 'my' && { backgroundColor: '#EFF6FF' }
-                            ]}
+                            style={{ flex: 1, paddingVertical: sp(14), alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'my' ? '#2563EB' : 'transparent' }}
                         >
-                            <Text
-                                style={[
-                                    styles.tabText,
-                                    { color: activeTab === 'my' ? '#0066CC' : colors.textSecondary }
-                                ]}
-                            >
+                            <Text style={{ fontSize: fs(13), fontWeight: '700', color: activeTab === 'my' ? '#2563EB' : colors.textSecondary }}>
                                 Benim Servislerim
                             </Text>
                         </Pressable>
                         <Pressable
                             onPress={() => setActiveTab('all')}
-                            style={[
-                                styles.tabBtn,
-                                activeTab === 'all' && { backgroundColor: '#EFF6FF' }
-                            ]}
+                            style={{ flex: 1, paddingVertical: sp(14), alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'all' ? '#2563EB' : 'transparent' }}
                         >
-                            <Text
-                                style={[
-                                    styles.tabText,
-                                    { color: activeTab === 'all' ? '#0066CC' : colors.textSecondary }
-                                ]}
-                            >
+                            <Text style={{ fontSize: fs(13), fontWeight: '700', color: activeTab === 'all' ? '#2563EB' : colors.textSecondary }}>
                                 Tüm Servisler
                             </Text>
                         </Pressable>
                     </View>
                 )}
+
+                {/* View Mode & Date Selector */}
+                <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.m, gap: spacing.m }}>
+                    <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#F1F5F9', borderRadius: sp(10), padding: sp(4) }}>
+                        {[
+                            { key: 'day', label: 'Günlük' },
+                            { key: 'month', label: 'Aylık' },
+                            { key: 'year', label: 'Yıllık' },
+                        ].map(mode => (
+                            <Pressable
+                                key={mode.key}
+                                onPress={() => setViewMode(mode.key)}
+                                style={{ flex: 1, paddingVertical: sp(6), alignItems: 'center', borderRadius: sp(8), backgroundColor: viewMode === mode.key ? (isDark ? '#334155' : '#FFFFFF') : 'transparent', shadowColor: viewMode === mode.key ? '#000' : 'transparent', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: viewMode === mode.key ? 1 : 0 }}
+                            >
+                                <Text style={{ fontSize: fs(12), fontWeight: viewMode === mode.key ? '700' : '500', color: viewMode === mode.key ? colors.text : colors.textSecondary }}>
+                                    {mode.label}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </View>
+
+                    <View style={styles.dateSelectorRow}>
+                        <Pressable onPress={handlePrev} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}>
+                            <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={() => viewMode === 'day' ? calendarPickerRef.current?.present() : null}
+                            style={({ pressed }) => [styles.dateCenterBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}
+                        >
+                            <MaterialCommunityIcons name="calendar-outline" size={16} color={serviceBlue} style={{ marginRight: 6 }} />
+                            <Text style={[styles.dateCenterText, { color: colors.text }]}>{dateLabel}</Text>
+                            {viewMode === 'day' && <MaterialCommunityIcons name="chevron-down" size={16} color={colors.textSecondary} style={{ marginLeft: 4 }} />}
+                        </Pressable>
+
+                        <Pressable onPress={handleNext} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}>
+                            <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                        </Pressable>
+                    </View>
+                </View>
 
                 {/* Content */}
                 {loading ? (
@@ -325,7 +308,7 @@ export default function ServicesScreen({ navigation }) {
                             <View style={styles.emptyState}>
                                 <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={colors.textTertiary} />
                                 <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-                                    Seçilen tarihte servis kaydı bulunmuyor.
+                                    Seçilen tarihlerde servis kaydı bulunmuyor.
                                 </Text>
                             </View>
                         }

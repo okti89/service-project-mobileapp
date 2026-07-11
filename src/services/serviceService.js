@@ -74,8 +74,33 @@ const serviceService = {
         return response?.data;
     },
 
+    updateServiceOperation: async (pk, payload) => {
+        const response = await api.patch(ENDPOINTS.SERVICES.SERVICE_OPERATIONS, { pk, ...payload });
+        return response?.data;
+    },
+
+    deleteServiceOperation: async (pk) => {
+        const response = await api.delete(ENDPOINTS.SERVICES.SERVICE_OPERATIONS, { data: { pk } });
+        return response?.data;
+    },
+
+    createServiceOperationTemplate: async (payload) => {
+        const response = await api.post(ENDPOINTS.SERVICES.SERVICE_OPERATION_TEMPLATES, payload);
+        return response?.data;
+    },
+
     createServicePayment: async (payload) => {
         const response = await api.post(ENDPOINTS.SERVICES.SERVICE_PAYMENTS, payload);
+        return response?.data;
+    },
+
+    updateServicePayment: async (pk, payload) => {
+        const response = await api.patch(ENDPOINTS.SERVICES.SERVICE_PAYMENTS, { pk, ...payload });
+        return response?.data;
+    },
+
+    deleteServicePayment: async (pk) => {
+        const response = await api.delete(ENDPOINTS.SERVICES.SERVICE_PAYMENTS, { data: { pk } });
         return response?.data;
     },
 

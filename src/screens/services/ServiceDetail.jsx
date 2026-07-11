@@ -8,6 +8,9 @@ import {
     StyleSheet,
     Text,
     View,
+    Modal,
+    SafeAreaView,
+    Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -23,6 +26,8 @@ import Header from '@/components/Header';
 import StatusPickerSheet from '@/components/home/StatusPickerSheet';
 import TechnicianPickerSheet from '@/components/TechnicianPickerSheet';
 import AppBottomSheet from '@/components/AppBottomSheet';
+import ServiceOperationSheet from '@/components/services/ServiceOperationSheet';
+import ServicePaymentSheet from '@/components/services/ServicePaymentSheet';
 import { fs, sp } from '@/theme/scale';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -33,8 +38,10 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import Share from 'react-native-share';
+import SignatureScreen from 'react-native-signature-canvas';
 import { getMapProvider } from '@/config/maps';
 import serviceService from '@/services/serviceService';
+import productService from '@/services/productService';
 
 dayjs.locale('tr');
 
@@ -50,11 +57,10 @@ const FALLBACK_SERVICE_STATUS_OPTIONS = [
 ];
 
 const TABS = [
-    { key: 'ozet', label: 'Özet' },
-    { key: 'musteri', label: 'Müşteri' },
-    { key: 'cihaz', label: 'Cihaz' },
+    { key: 'genel', label: 'Genel' },
     { key: 'islemler', label: 'İşlemler' },
     { key: 'odeme', label: 'Ödeme' },
+    { key: 'imza', label: 'İmza' },
     { key: 'zaman', label: 'Zaman' },
 ];
 
@@ -77,7 +83,17 @@ export default function ServiceDetail({ route, navigation }) {
     const [techniciansLoading, setTechniciansLoading] = useState(false);
     const [technicians, setTechnicians] = useState([]);
     const [statusOptions, setStatusOptions] = useState(FALLBACK_SERVICE_STATUS_OPTIONS);
-    const [activeTab, setActiveTab] = useState('ozet');
+    const [activeTab, setActiveTab] = useState('genel');
+    const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+    const [paymentMethods, setPaymentMethods] = useState([]);
+    const [operationTemplatesLoading, setOperationTemplatesLoading] = useState(false);
+    const [operationTemplates, setOperationTemplates] = useState([]);
+    const [showOperationSheet, setShowOperationSheet] = useState(false);
+    const [showPaymentSheet, setShowPaymentSheet] = useState(false);
+    const [editingOperation, setEditingOperation] = useState(null);
+    const [editingPayment, setEditingPayment] = useState(null);
+    const [products, setProducts] = useState([]);
+    const [productsLoading, setProductsLoading] = useState(false);
 
     const [showMapModal, setShowMapModal] = useState(false);
     const [mapCoords, setMapCoords] = useState(null);
@@ -138,11 +154,34 @@ export default function ServiceDetail({ route, navigation }) {
         }
     }, []);
 
+    const loadReferenceData = useCallback(async () => {
+        try {
+            setPaymentMethodsLoading(true);
+            setOperationTemplatesLoading(true);
+            setProductsLoading(true);
+            const [methods, templates, productList] = await Promise.all([
+                serviceService.getPaymentMethods(),
+                serviceService.getServiceOperationTemplates(),
+                productService.getProducts().catch(() => []),
+            ]);
+            setPaymentMethods(Array.isArray(methods) ? methods : []);
+            setOperationTemplates(Array.isArray(templates) ? templates : []);
+            setProducts(Array.isArray(productList) ? productList : []);
+        } catch (error) {
+            showToast('warning', 'Eksik Veri', 'Ödeme yöntemleri, işlem şablonları veya envanter ürünleri yüklenemedi.');
+        } finally {
+            setPaymentMethodsLoading(false);
+            setOperationTemplatesLoading(false);
+            setProductsLoading(false);
+        }
+    }, [showToast]);
+
     useEffect(() => {
         fetchService();
         fetchServiceStatuses();
+        loadReferenceData();
         if (isAdmin) fetchTechnicians();
-    }, [fetchService, fetchServiceStatuses, fetchTechnicians, isAdmin]);
+    }, [fetchService, fetchServiceStatuses, fetchTechnicians, isAdmin, loadReferenceData]);
 
     useEffect(() => {
         const focus = route?.params?.focus;
@@ -335,7 +374,7 @@ export default function ServiceDetail({ route, navigation }) {
                     try {
                         // Öncelikle hızlıca son bilinen konumu almayı dene
                         let currentPos = await Location.getLastKnownPositionAsync();
-                        
+
                         // Son bilinen konum yoksa veya güncel değilse balanced doğrulukta almayı dene
                         if (!currentPos) {
                             currentPos = await Promise.race([
@@ -370,7 +409,7 @@ export default function ServiceDetail({ route, navigation }) {
                                         longitude: lon,
                                     })));
                                 }
-                                
+
                                 const leg = route.legs?.[0];
                                 if (leg) {
                                     setRouteDistance(leg.distance?.text || '');
@@ -591,6 +630,97 @@ export default function ServiceDetail({ route, navigation }) {
         }
     }, [service, isAdmin, showToast, printLocalPdf, downloadWarrantyPdfFile]);
 
+    const handleOperationSubmit = useCallback(async (payload, operation) => {
+        if (operation?.id) {
+            await serviceService.updateServiceOperation(operation.id, payload);
+            showToast('success', 'İşlem', 'İşlem güncellendi.');
+        } else {
+            await serviceService.createServiceOperation(payload);
+            showToast('success', 'İşlem', 'İşlem eklendi.');
+        }
+        setEditingOperation(null);
+        await fetchService();
+    }, [fetchService, showToast]);
+
+    const handleOperationDelete = useCallback(async (operation) => {
+        if (!operation?.id) return;
+        await serviceService.deleteServiceOperation(operation.id);
+        showToast('success', 'İşlem', 'İşlem silindi.');
+        setEditingOperation(null);
+        await fetchService();
+    }, [fetchService, showToast]);
+
+    const handleSaveOperationTemplate = useCallback(async (payload) => {
+        const created = await serviceService.createServiceOperationTemplate(payload);
+        setOperationTemplates((prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            if (list.some((item) => item?.id === created?.id)) return list;
+            return [created, ...list];
+        });
+    }, []);
+
+    const handlePaymentSubmit = useCallback(async (payload, payment) => {
+        if (payment?.id) {
+            await serviceService.updateServicePayment(payment.id, payload);
+            showToast('success', 'Ödeme', 'Ödeme güncellendi.');
+        } else {
+            await serviceService.createServicePayment(payload);
+            showToast('success', 'Ödeme', 'Ödeme eklendi.');
+        }
+        setEditingPayment(null);
+        await fetchService();
+    }, [fetchService, showToast]);
+
+    const handlePaymentDelete = useCallback(async (payment) => {
+        if (!payment?.id) return;
+        await serviceService.deleteServicePayment(payment.id);
+        showToast('success', 'Ödeme', 'Ödeme silindi.');
+        setEditingPayment(null);
+        await fetchService();
+    }, [fetchService, showToast]);
+
+    const handleCollectRemainingPayment = useCallback(async () => {
+        const remainingBalance = Number(service?.remaining_balance ?? 0);
+        if (!service?.id) return;
+        if (remainingBalance <= 0) {
+            showToast('info', 'Ödeme', 'Kalan bakiye bulunmuyor.');
+            return;
+        }
+        const defaultMethod = paymentMethods.find((item) => item?.is_default) || paymentMethods[0];
+        if (!defaultMethod?.id) {
+            showToast('warning', 'Ödeme', 'Kayıtlı ödeme yöntemi bulunamadı.');
+            return;
+        }
+        await serviceService.createServicePayment({
+            service: service.id,
+            amount: remainingBalance,
+            payment_method: defaultMethod.id,
+            note: '\u0048\u0131zl\u0131 tahsilat',
+        });
+        showToast('success', 'Ödeme', 'Kalan tutarın tamamı tahsil edildi.');
+        await fetchService();
+    }, [fetchService, paymentMethods, service, showToast]);
+
+    const openCreateOperationSheet = useCallback(() => {
+        setEditingOperation(null);
+        setShowOperationSheet(true);
+    }, []);
+
+    const openEditOperationSheet = useCallback((operation) => {
+        setEditingOperation(operation);
+        setShowOperationSheet(true);
+    }, []);
+
+    const openCreatePaymentSheet = useCallback(() => {
+        setEditingPayment(null);
+        setShowPaymentSheet(true);
+    }, []);
+
+    const openEditPaymentSheet = useCallback((payment) => {
+        setEditingPayment(payment);
+        setShowPaymentSheet(true);
+    }, []);
+
     // ── Yüklenme / Hata durumları ──────────────────────────────────────────────
 
     if (loading) {
@@ -627,10 +757,10 @@ export default function ServiceDetail({ route, navigation }) {
 
     return (
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
-            <View style={{ flex: 1, backgroundColor: bg }}>
-                <Header 
-                    title="Servis Detayı" 
-                    showBack 
+            <View style={{ flex: 1, backgroundColor: bg, paddingBottom: 25 }}>
+                <Header
+                    title="Servis Detayı"
+                    showBack
                     rightActions={isAdmin ? [
                         {
                             icon: 'pencil',
@@ -690,6 +820,8 @@ export default function ServiceDetail({ route, navigation }) {
                         <ActionBtn icon="whatsapp" color="#25D366" label="WhatsApp" onPress={handleWhatsApp} colors={colors} />
                         <ActionBtn icon="phone-outline" color="#3B82F6" label="Ara" onPress={handleCall} colors={colors} />
                         <ActionBtn icon="navigation-variant-outline" color="#8B5CF6" label="Harita" onPress={handleMap} colors={colors} />
+                        <ActionBtn icon="wrench-outline" color="#2563EB" label={'\u0130\u015flem'} onPress={openCreateOperationSheet} colors={colors} />
+                        <ActionBtn icon="cash-plus" color="#16A34A" label={'\u00d6deme'} onPress={openCreatePaymentSheet} colors={colors} />
                         {isAdmin && (
                             <>
                                 <ActionBtn icon="file-pdf-box" color="#EF4444" label="PDF" onPress={handlePdf} colors={colors} />
@@ -714,16 +846,40 @@ export default function ServiceDetail({ route, navigation }) {
 
                     {/* ── Tab İçerikleri ── */}
                     <View style={styles.tabContent}>
-                        {activeTab === 'ozet' && <OzetTab service={service} items={items} payments={payments} colors={colors} isDark={isDark} />}
-                        {activeTab === 'musteri' && <MusteriTab service={service} colors={colors} isDark={isDark} onCall={handleCall} onMap={handleMap} />}
-                        {activeTab === 'cihaz' && <CihazTab service={service} colors={colors} isDark={isDark} />}
-                        {activeTab === 'islemler' && <IslemlerTab items={items} colors={colors} isDark={isDark} />}
-                        {activeTab === 'odeme' && <OdemeTab service={service} payments={payments} colors={colors} isDark={isDark} />}
+                        {activeTab === 'genel' && <GenelTab service={service} items={items} colors={colors} isDark={isDark} onCall={handleCall} onMap={handleMap} />}
+                        {activeTab === 'islemler' && <IslemlerTab items={items} colors={colors} isDark={isDark} onAdd={openCreateOperationSheet} onEdit={openEditOperationSheet} />}
+                        {activeTab === 'odeme' && <OdemeTab service={service} payments={payments} colors={colors} isDark={isDark} onAdd={openCreatePaymentSheet} onEdit={openEditPaymentSheet} onCollectRemaining={handleCollectRemainingPayment} />}
+                        {activeTab === 'imza' && <ImzaTab service={service} fetchService={fetchService} signatureData={service?.signatures?.[0]} colors={colors} isDark={isDark} />}
                         {activeTab === 'zaman' && <ZamanTab timeline={timeline} colors={colors} isDark={isDark} />}
                     </View>
 
                 </ScrollView>
             </View>
+
+            <ServiceOperationSheet
+                visible={showOperationSheet}
+                onClose={() => { setShowOperationSheet(false); setEditingOperation(null); }}
+                service={service}
+                templates={operationTemplates}
+                templatesLoading={operationTemplatesLoading}
+                products={products}
+                productsLoading={productsLoading}
+                operation={editingOperation}
+                onSubmit={handleOperationSubmit}
+                onDelete={handleOperationDelete}
+                onSaveTemplate={handleSaveOperationTemplate}
+            />
+
+            <ServicePaymentSheet
+                visible={showPaymentSheet}
+                onClose={() => { setShowPaymentSheet(false); setEditingPayment(null); }}
+                service={service}
+                paymentMethods={paymentMethods}
+                paymentMethodsLoading={paymentMethodsLoading}
+                payment={editingPayment}
+                onSubmit={handlePaymentSubmit}
+                onDelete={handlePaymentDelete}
+            />
 
             <StatusPickerSheet
                 ref={statusSheetRef}
@@ -778,7 +934,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }]}>
                                 <MaterialCommunityIcons name="whatsapp" size={20} color="#16A34A" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -795,7 +951,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }]}>
                                 <MaterialCommunityIcons name="printer-outline" size={20} color="#D97706" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -812,7 +968,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }]}>
                                 <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -829,7 +985,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#7C3AED1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#7C3AED1A' }]}>
                                 <MaterialCommunityIcons name="file-download-outline" size={20} color="#7C3AED" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -881,7 +1037,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }]}>
                                 <MaterialCommunityIcons name="whatsapp" size={20} color="#16A34A" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -898,7 +1054,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }]}>
                                 <MaterialCommunityIcons name="printer-outline" size={20} color="#D97706" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -915,7 +1071,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }]}>
                                 <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -932,7 +1088,7 @@ export default function ServiceDetail({ route, navigation }) {
                                 { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
                             ]}
                         >
-                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }]}>
                                 <MaterialCommunityIcons name="file-download-outline" size={20} color="#2563EB" />
                             </View>
                             <View style={styles.documentOptionBody}>
@@ -954,7 +1110,7 @@ export default function ServiceDetail({ route, navigation }) {
                     setRouteDuration('');
                     setUserCoords(null);
                 }}
-                snapPoints={['75%']}
+                snapPoints={['90%']}
                 wrapContent={false}
             >
                 <View style={styles.mapModalContainer}>
@@ -1056,21 +1212,24 @@ const InfoRow = ({ label, value, onPress, multiline, colors }) => {
 
 // ─── Kart Sarıcı ──────────────────────────────────────────────────────────────
 
-const Card = ({ title, icon, children, colors, isDark }) => (
+const Card = ({ title, icon, children, colors, isDark, rightAction }) => (
     <View style={[styles.card, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
         {title ? (
             <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
-                <MaterialCommunityIcons name={icon} size={15} color='#2563EB' />
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
+                <View style={styles.cardHeaderLeft}>
+                    <MaterialCommunityIcons name={icon} size={15} color='#2563EB' />
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
+                </View>
+                {rightAction ? <View>{rightAction}</View> : null}
             </View>
         ) : null}
         <View style={styles.cardBody}>{children}</View>
     </View>
 );
 
-// ─── ÖZET TAB ─────────────────────────────────────────────────────────────────
+// ─── GENEL TAB ─────────────────────────────────────────────────────────────────
 
-const OzetTab = ({ service, items, payments, colors, isDark }) => {
+const GenelTab = ({ service, items, colors, isDark, onCall, onMap }) => {
     const totalPrice = parseFloat(service.total_price) || 0;
     const totalPaid = parseFloat(service.total_paid) || 0;
     const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
@@ -1089,8 +1248,15 @@ const OzetTab = ({ service, items, payments, colors, isDark }) => {
             <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
                     <MaterialCommunityIcons name="tools" size={18} color="#2563EB" />
-                    <Text style={[styles.statValue, { color: colors.text }]}>{items.length} işlem</Text>
+                    <Text style={[styles.statValue, { color: colors.text }]}>{items.length} adet</Text>
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Yapılan İşlem</Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
+                    <MaterialCommunityIcons name="calculator" size={18} color="#2563EB" />
+                    <Text style={[styles.statValue, { color: colors.text }]}>
+                        {formatCurrency(totalPrice)}
+                    </Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Tutar</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
                     <MaterialCommunityIcons name="currency-try" size={18} color={remaining > 0 ? '#EF4444' : '#16A34A'} />
@@ -1111,121 +1277,150 @@ const OzetTab = ({ service, items, payments, colors, isDark }) => {
             {/* Müşteri Bilgileri */}
             <Card title="Müşteri Bilgileri" icon="account-outline" colors={colors} isDark={isDark}>
                 <InfoRow label="Ad Soyad" value={service.customer_full_name} colors={colors} />
-                <InfoRow label="Telefon" value={service.customer_phone} colors={colors} />
-                <InfoRow label="Adres" value={service.customer_address} colors={colors} multiline />
-            </Card>
-        </View>
-    );
-};
-
-// ─── MÜŞTERİ TAB ──────────────────────────────────────────────────────────────
-
-const MusteriTab = ({ service, colors, isDark, onCall, onMap }) => (
-    <View style={styles.tabSection}>
-        <Card title="Müşteri Bilgileri" icon="account-outline" colors={colors} isDark={isDark}>
-            <InfoRow label="Ad Soyad" value={service.customer_full_name} colors={colors} />
-            <InfoRow label="Telefon" value={service.customer_phone} onPress={onCall} colors={colors} />
-            <InfoRow label="Adres" value={service.customer_address} onPress={onMap} colors={colors} multiline />
-        </Card>
-        {service.technician_name ? (
-            <Card title="Atanan Teknisyen" icon="account-hard-hat-outline" colors={colors} isDark={isDark}>
-                <InfoRow label="Teknisyen" value={service.technician_name} colors={colors} />
-            </Card>
-        ) : null}
-    </View>
-);
-
-// ─── CİHAZ TAB ────────────────────────────────────────────────────────────────
-
-const CihazTab = ({ service, colors, isDark }) => (
-    <View style={styles.tabSection}>
-        <Card title="Cihaz Bilgileri" icon="cellphone-link" colors={colors} isDark={isDark}>
-            <InfoRow label="Tür" value={service.device_type_name} colors={colors} />
-            <InfoRow label="Marka" value={service.device_brand_name} colors={colors} />
-            <InfoRow label="Model" value={service.device_model_name} colors={colors} />
-            {service.warranty_certificate ? (
-                <InfoRow label="Garanti" value="24 Ay" colors={colors} />
-            ) : null}
-        </Card>
-        {service.fault_description ? (
-            <Card title="Arıza Açıklaması" icon="wrench-outline" colors={colors} isDark={isDark}>
-                <Text style={[styles.faultText, { color: colors.text }]}>{service.fault_description}</Text>
-            </Card>
-        ) : null}
-    </View>
-);
-
-// ─── İŞLEMLER TAB ─────────────────────────────────────────────────────────────
-
-const IslemlerTab = ({ items, colors, isDark }) => (
-    <View style={styles.tabSection}>
-        <Card title="Yapılan İşlemler" icon="tools" colors={colors} isDark={isDark}>
-            {items.length === 0 ? (
-                <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>Henüz işlem eklenmemiş.</Text>
-            ) : items.map((item, i) => (
-                <View key={String(item.id || i)} style={[styles.itemRow, { borderBottomColor: colors.border }, i === items.length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={styles.itemRowLeft}>
-                        <View style={[styles.itemCheck, { backgroundColor: '#2563EB' + '18' }]}>
-                            <MaterialCommunityIcons name="check" size={13} color="#2563EB" />
-                        </View>
-                        <View style={styles.itemInfo}>
-                            <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name || item.operation_name || 'İşlem'}</Text>
-                            {item.quantity ? <Text style={[styles.itemQty, { color: colors.textSecondary }]}>{item.quantity} adet</Text> : null}
-                        </View>
-                    </View>
-                    {item.price ? (
-                        <Text style={[styles.itemPrice, { color: colors.text }]}>{formatCurrency(item.price)}</Text>
-                    ) : null}
-                </View>
-            ))}
-        </Card>
-    </View>
-);
-
-// ─── ÖDEME TAB ────────────────────────────────────────────────────────────────
-
-const OdemeTab = ({ service, payments, colors, isDark }) => {
-    const totalPrice = parseFloat(service.total_price) || 0;
-    const totalPaid = parseFloat(service.total_paid) || 0;
-    const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
-
-    return (
-        <View style={styles.tabSection}>
-            <Card title="Ödeme Özeti" icon="cash-multiple" colors={colors} isDark={isDark}>
-                <View style={styles.payRow}>
-                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Toplam</Text>
-                    <Text style={[styles.payValue, { color: colors.text }]}>{formatCurrency(totalPrice)}</Text>
-                </View>
-                <View style={styles.payRow}>
-                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Ödenen</Text>
-                    <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(totalPaid)}</Text>
-                </View>
-                <View style={[styles.payRow, styles.payRowLast, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Kalan</Text>
-                    <Text style={[styles.payValue, { color: remaining > 0 ? '#EF4444' : '#16A34A', fontWeight: '800' }]}>
-                        {formatCurrency(remaining)}
-                    </Text>
-                </View>
+                <InfoRow label="Telefon" value={service.customer_phone} onPress={onCall} colors={colors} />
+                <InfoRow label="Adres" value={service.customer_address} onPress={onMap} colors={colors} multiline />
             </Card>
 
-            {payments.length > 0 ? (
-                <Card title="Ödeme Geçmişi" icon="history" colors={colors} isDark={isDark}>
-                    {payments.map((p, i) => (
-                        <View key={String(p.id || i)} style={[styles.payRow, { borderBottomColor: colors.border }, i < payments.length - 1 && styles.payRowBorder]}>
-                            <View>
-                                <Text style={[styles.payLabel, { color: colors.text }]}>{p.payment_method_name || 'Ödeme'}</Text>
-                                {p.created_at ? <Text style={[styles.payDate, { color: colors.textSecondary }]}>{dayjs(p.created_at).format('DD MMM YYYY')}</Text> : null}
-                            </View>
-                            <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(p.amount)}</Text>
-                        </View>
-                    ))}
+            {/* Cihaz Bilgileri */}
+            <Card title="Cihaz Bilgileri" icon="cellphone-link" colors={colors} isDark={isDark}>
+                <InfoRow label="Tür" value={service.device_type_name} colors={colors} />
+                <InfoRow label="Marka" value={service.device_brand_name} colors={colors} />
+                <InfoRow label="Model" value={service.device_model_name} colors={colors} />
+                {service.warranty_certificate ? (
+                    <InfoRow label="Garanti" value="24 Ay" colors={colors} />
+                ) : null}
+            </Card>
+
+            {/* Teknisyen Bilgisi */}
+            {service.technician_name ? (
+                <Card title="Atanan Teknisyen" icon="account-hard-hat-outline" colors={colors} isDark={isDark}>
+                    <InfoRow label="Teknisyen" value={service.technician_name} colors={colors} />
                 </Card>
             ) : null}
         </View>
     );
 };
 
-// ─── ZAMAN TAB ────────────────────────────────────────────────────────────────
+// ─── İŞLEMLER TAB ─────────────────────────────────────────────────────────────
+
+const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => (
+    <View style={styles.tabSection}>
+        <Card
+            title={'Yapılan İşlemler'}
+            icon="tools"
+            colors={colors}
+            isDark={isDark}
+            rightAction={
+                <Pressable
+                    onPress={onAdd}
+                    style={({ pressed }) => [
+                        styles.inlineHeaderAction,
+                        { backgroundColor: '#2563EB14', borderColor: '#2563EB33', opacity: pressed ? 0.75 : 1 },
+                    ]}
+                >
+                    <MaterialCommunityIcons name="plus" size={16} color="#2563EB" />
+                    <Text style={styles.inlineHeaderActionText}>{'\u0130\u015flem Ekle'}</Text>
+                </Pressable>
+            }
+        >
+            {items.length === 0 ? (
+                <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Hen\u00fcz i\u015flem eklenmemi\u015f.'}</Text>
+            ) : items.map((item, i) => (
+                <View key={String(item.id || i)} style={[styles.itemRow, { borderBottomColor: colors.border }, i === items.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={styles.itemRowLeft}>
+                        <View style={[styles.itemCheck, { backgroundColor: '#2563EB18' }]}>
+                            <MaterialCommunityIcons name="check" size={13} color="#2563EB" />
+                        </View>
+                        <View style={styles.itemInfo}>
+                            <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>{item.name || item.operation_name || 'İşlem'}</Text>
+                            <Text style={[styles.itemQty, { color: colors.textSecondary }]}>{(item.quantity || 1) + ' adet'}</Text>
+                        </View>
+                    </View>
+                    <View style={styles.itemRowRight}>
+                        <Text style={[styles.itemPrice, { color: colors.text }]}>{formatCurrency(item.total_price ?? item.price ?? 0)}</Text>
+                        <Pressable onPress={() => onEdit?.(item)} style={({ pressed }) => [styles.rowIconButton, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                            <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                </View>
+            ))}
+        </Card>
+    </View>
+);
+
+const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectRemaining }) => {
+    const totalPrice = parseFloat(service.total_price) || 0;
+    const totalPaid = parseFloat(service.total_paid) || 0;
+    const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
+
+    return (
+        <View style={styles.tabSection}>
+            <Card
+                title={'\u00d6deme \u00d6zeti'}
+                icon="cash-multiple"
+                colors={colors}
+                isDark={isDark}
+                rightAction={
+                    <View style={styles.inlineHeaderActions}>
+                        <Pressable
+                            onPress={onCollectRemaining}
+                            style={({ pressed }) => [
+                                styles.inlineHeaderAction,
+                                { backgroundColor: '#16A34A14', borderColor: '#16A34A33', opacity: pressed ? 0.75 : 1 },
+                            ]}
+                        >
+                            <MaterialCommunityIcons name="lightning-bolt" size={16} color="#16A34A" />
+                            <Text style={[styles.inlineHeaderActionText, { color: '#15803D' }]}>{'Tamam\u0131n\u0131 Al'}</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={onAdd}
+                            style={({ pressed }) => [
+                                styles.inlineHeaderAction,
+                                { backgroundColor: '#2563EB14', borderColor: '#2563EB33', opacity: pressed ? 0.75 : 1 },
+                            ]}
+                        >
+                            <MaterialCommunityIcons name="plus" size={16} color="#2563EB" />
+                            <Text style={styles.inlineHeaderActionText}>{'\u00d6deme Ekle'}</Text>
+                        </Pressable>
+                    </View>
+                }
+            >
+                <View style={styles.payRow}>
+                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Toplam</Text>
+                    <Text style={[styles.payValue, { color: colors.text }]}>{formatCurrency(totalPrice)}</Text>
+                </View>
+                <View style={styles.payRow}>
+                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>{'\u00d6denen'}</Text>
+                    <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(totalPaid)}</Text>
+                </View>
+                <View style={[styles.payRow, styles.payRowLast, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Kalan</Text>
+                    <Text style={[styles.payValue, { color: remaining > 0 ? '#EF4444' : '#16A34A', fontWeight: '800' }]}>{formatCurrency(remaining)}</Text>
+                </View>
+            </Card>
+
+            <Card title={'\u00d6deme Ge\u00e7mi\u015fi'} icon="history" colors={colors} isDark={isDark}>
+                {payments.length > 0 ? payments.map((p, i) => (
+                    <View key={String(p.id || i)} style={[styles.payHistoryRow, { borderBottomColor: colors.border }, i === payments.length - 1 && { borderBottomWidth: 0 }]}>
+                        <View style={styles.payHistoryInfo}>
+                            <Text style={[styles.payLabel, { color: colors.text }]}>{p.payment_method_name || 'Ödeme'}</Text>
+                            {p.created_at ? <Text style={[styles.payDate, { color: colors.textSecondary }]}>{dayjs(p.created_at).format('DD MMM YYYY')}</Text> : null}
+                            {p.note ? <Text style={[styles.payNote, { color: colors.textSecondary }]} numberOfLines={2}>{p.note}</Text> : null}
+                        </View>
+                        <View style={styles.payHistoryActions}>
+                            <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(p.amount)}</Text>
+                            <Pressable onPress={() => onEdit?.(p)} style={({ pressed }) => [styles.rowIconButton, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}>
+                                <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textSecondary} />
+                            </Pressable>
+                        </View>
+                    </View>
+                )) : (
+                    <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Hen\u00fcz \u00f6deme eklenmemi\u015f.'}</Text>
+                )}
+            </Card>
+        </View>
+    );
+};
 
 const TIMELINE_COLORS = {
     created: '#2563EB',
@@ -1242,7 +1437,14 @@ const ZamanTab = ({ timeline, colors, isDark }) => (
             {timeline.length === 0 ? (
                 <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>Henüz kayıt yok.</Text>
             ) : timeline.map((event, i) => {
-                const dotColor = TIMELINE_COLORS[event.event_type] || TIMELINE_COLORS.default;
+                const dotColor = event.new_status_color || '#8B5CF6';
+                const isCreation = !event.old_status || event.old_status === event.new_status || event.old_status === 'new';
+
+                let title = `Durum "${event.new_status_name || event.new_status}" olarak güncellendi.`;
+                if (i === timeline.length - 1 && isCreation) {
+                    title = `Servis kaydı "${event.new_status_name || event.new_status}" durumu ile oluşturuldu.`;
+                }
+
                 return (
                     <View key={String(event.id || i)} style={styles.timelineRow}>
                         <View style={styles.timelineLine}>
@@ -1251,11 +1453,11 @@ const ZamanTab = ({ timeline, colors, isDark }) => (
                         </View>
                         <View style={styles.timelineContent}>
                             <Text style={[styles.timelineTitle, { color: colors.text }]} numberOfLines={2}>
-                                {event.description || event.event_type || 'Etkinlik'}
+                                {title}
                             </Text>
-                            {event.created_at ? (
+                            {event.timestamp ? (
                                 <Text style={[styles.timelineDate, { color: colors.textSecondary }]}>
-                                    {dayjs(event.created_at).format('DD MMMM YYYY · HH:mm')}
+                                    {dayjs(event.timestamp).format('DD MMMM YYYY · HH:mm')}
                                 </Text>
                             ) : null}
                         </View>
@@ -1265,6 +1467,133 @@ const ZamanTab = ({ timeline, colors, isDark }) => (
         </Card>
     </View>
 );
+
+const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
+    const { showToast } = useToast();
+    const [aktifImzalayan, setAktifImzalayan] = useState(null);
+    const [acilmaSayaci, setAcilmaSayaci] = useState(0);
+    const [modalHazir, setModalHazir] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const modalRef = useRef();
+
+    const imzaWebStyle = `
+      .m-signature-pad { box-shadow: none; border: none; }
+      .m-signature-pad--body { border: none; }
+      .m-signature-pad--footer { display: none; margin: 0; }
+      body,html { background-color: #fff; }
+    `;
+
+    const teknisyenImza = signatureData?.technician_signature;
+    const musteriImza = signatureData?.customer_signature;
+
+    const modalAc = (kisi) => {
+        setAcilmaSayaci((n) => n + 1);
+        setModalHazir(false);
+        setAktifImzalayan(kisi);
+    };
+
+    const modalKapat = () => {
+        setAktifImzalayan(null);
+        setModalHazir(false);
+    };
+
+    const handleImzaSonucu = async (base64) => {
+        setIsSaving(true);
+        try {
+            const payload = {
+                service: service.id,
+            };
+            if (aktifImzalayan === 'teknisyen') {
+                payload.technician_signature_base64 = base64;
+            } else if (aktifImzalayan === 'musteri') {
+                payload.customer_signature_base64 = base64;
+            }
+
+            await serviceService.saveServiceSignature(payload);
+            showToast('success', 'İmza', 'İmza başarıyla kaydedildi.');
+            await fetchService();
+            modalKapat();
+        } catch (error) {
+            showToast('error', 'Hata', 'İmza kaydedilirken bir hata oluştu.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <View style={styles.tabSection}>
+            <Card title="İmzalar" icon="draw" colors={colors} isDark={isDark}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Teknisyen İmzası</Text>
+                <Pressable
+                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#fafafa' }]}
+                    onPress={() => modalAc("teknisyen")}
+                >
+                    {teknisyenImza ? (
+                        <Image source={{ uri: teknisyenImza }} style={styles.imzaResim} />
+                    ) : (
+                        <Text style={[styles.imzaPlaceholder, { color: colors.textTertiary }]}>Dokunup imza atmak için tıklayın</Text>
+                    )}
+                </Pressable>
+
+                <Text style={[styles.infoLabel, { color: colors.textSecondary, marginTop: 24, marginBottom: 8 }]}>Müşteri İmzası</Text>
+                <Pressable
+                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#fafafa' }]}
+                    onPress={() => modalAc("musteri")}
+                >
+                    {musteriImza ? (
+                        <Image source={{ uri: musteriImza }} style={styles.imzaResim} />
+                    ) : (
+                        <Text style={[styles.imzaPlaceholder, { color: colors.textTertiary }]}>Dokunup imza atmak için tıklayın</Text>
+                    )}
+                </Pressable>
+            </Card>
+
+            <Modal
+                visible={aktifImzalayan !== null}
+                animationType="slide"
+                onShow={() => setModalHazir(true)}
+                onRequestClose={modalKapat}
+            >
+                <SafeAreaView style={[styles.modalSafe, { backgroundColor: isDark ? colors.surface : '#fff' }]}>
+                    <Text style={[styles.modalBaslik, { color: colors.text }]}>
+                        {aktifImzalayan === "teknisyen" ? "Teknisyen İmzası" : "Müşteri İmzası"}
+                    </Text>
+                    <Text style={[styles.modalAciklama, { color: colors.textSecondary }]}>
+                        Lütfen aşağıdaki alana parmağınızla imzanızı atın.
+                    </Text>
+
+                    <View style={[styles.modalCanvasKutu, { borderColor: colors.border }]}>
+                        {modalHazir && (
+                            <SignatureScreen
+                                key={acilmaSayaci}
+                                ref={modalRef}
+                                onOK={handleImzaSonucu}
+                                onEmpty={() => showToast('warning', 'Uyarı', 'İmza boş, tekrar deneyin.')}
+                                webStyle={imzaWebStyle}
+                                autoClear={false}
+                                descriptionText=""
+                                penColor="#000000"
+                                backgroundColor="#ffffff"
+                            />
+                        )}
+                    </View>
+
+                    <View style={styles.modalButonSatiri}>
+                        <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#f1f1f1' }]} onPress={() => modalRef.current?.clearSignature()}>
+                            <Text style={[styles.imzaBtnText, { color: colors.text }]}>Temizle</Text>
+                        </Pressable>
+                        <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#f1f1f1' }]} onPress={modalKapat}>
+                            <Text style={[styles.imzaBtnText, { color: colors.text }]}>Vazgeç</Text>
+                        </Pressable>
+                        <Pressable style={[styles.imzaBtn, { backgroundColor: '#2563eb', flex: 1.4 }]} onPress={() => modalRef.current?.readSignature()} disabled={isSaving}>
+                            {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.imzaBtnText, { color: '#fff' }]}>Onayla</Text>}
+                        </Pressable>
+                    </View>
+                </SafeAreaView>
+            </Modal>
+        </View>
+    );
+};
 
 // ─── Stiller ──────────────────────────────────────────────────────────────────
 
@@ -1302,7 +1631,8 @@ const styles = StyleSheet.create({
 
     // Kart
     card: { borderRadius: sp(16), borderWidth: 1, overflow: 'hidden', marginBottom: spacing.m },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: sp(8), paddingHorizontal: spacing.l, paddingVertical: spacing.s + 4, borderBottomWidth: 1 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: sp(8), paddingHorizontal: spacing.l, paddingVertical: spacing.s + 4, borderBottomWidth: 1 },
+    cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: sp(8), flex: 1 },
     cardTitle: { fontSize: fs(13), fontWeight: '800' },
     cardBody: { paddingHorizontal: spacing.l, paddingVertical: spacing.s },
 
@@ -1313,7 +1643,7 @@ const styles = StyleSheet.create({
     infoValue: { fontSize: fs(13), fontWeight: '700', textAlign: 'right', flex: 1 },
 
     // Özet istatistik kartları
-    tabSection: {},
+    tabSection: { paddingBottom: sp(40) },
     statsRow: { flexDirection: 'row', gap: spacing.s, marginBottom: spacing.m },
     statCard: { flex: 1, borderRadius: sp(14), borderWidth: 1, paddingVertical: spacing.m, alignItems: 'center', gap: sp(4) },
     statValue: { fontSize: fs(14), fontWeight: '800' },
@@ -1329,6 +1659,11 @@ const styles = StyleSheet.create({
     itemName: { fontSize: fs(13), fontWeight: '700' },
     itemQty: { fontSize: fs(11), fontWeight: '500' },
     itemPrice: { fontSize: fs(13), fontWeight: '700', marginLeft: sp(8) },
+    itemRowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: spacing.s },
+    rowIconButton: { width: sp(32), height: sp(32), borderRadius: sp(10), borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    inlineHeaderActions: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap', justifyContent: 'flex-end' },
+    inlineHeaderAction: { flexDirection: 'row', alignItems: 'center', gap: sp(4), borderWidth: 1, borderRadius: sp(999), paddingHorizontal: spacing.s, paddingVertical: sp(6) },
+    inlineHeaderActionText: { color: '#2563EB', fontSize: fs(11), fontWeight: '800' },
 
     // Ödeme
     payRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.s + 2 },
@@ -1337,6 +1672,10 @@ const styles = StyleSheet.create({
     payLabel: { fontSize: fs(13), fontWeight: '500' },
     payValue: { fontSize: fs(14), fontWeight: '700' },
     payDate: { fontSize: fs(11), fontWeight: '400', marginTop: sp(2) },
+    payNote: { fontSize: fs(11), fontWeight: '500', marginTop: sp(3), lineHeight: sp(16) },
+    payHistoryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.s + 2, borderBottomWidth: StyleSheet.hairlineWidth, gap: spacing.s },
+    payHistoryInfo: { flex: 1 },
+    payHistoryActions: { alignItems: 'flex-end', gap: spacing.xs },
 
     // Zaman çizelgesi
     timelineRow: { flexDirection: 'row', gap: spacing.s, paddingVertical: spacing.xs },
@@ -1356,7 +1695,7 @@ const styles = StyleSheet.create({
     mapModalSubtitle: { fontSize: 12, fontWeight: '600', marginTop: 2 },
     mapModalCloseBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     mapWrap: { flex: 1, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-    mapModalFooter: { paddingVertical: spacing.m, gap: spacing.s },
+    mapModalFooter: { paddingVertical: spacing.m, gap: spacing.s, paddingBottom: 100 },
     mapAddressText: { fontSize: fs(12), fontWeight: '500', lineHeight: sp(18), textAlign: 'center' },
     mapNavBtn: { minHeight: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.s },
     mapNavBtnText: { color: '#fff', fontSize: fs(14), fontWeight: '700' },
@@ -1381,4 +1720,16 @@ const styles = StyleSheet.create({
     warrantyMonthRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
     warrantyMonthChip: { minWidth: sp(72), paddingHorizontal: spacing.m, paddingVertical: spacing.s, borderRadius: sp(999), borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     warrantyMonthChipText: { fontSize: fs(12), fontWeight: '700' },
+
+    // İmza
+    imzaKutu: { height: 140, borderWidth: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    imzaResim: { width: '100%', height: '100%', resizeMode: 'contain' },
+    imzaPlaceholder: { fontSize: fs(13), fontWeight: '500' },
+    modalSafe: { flex: 1, padding: spacing.m, paddingTop: spacing.xl },
+    modalBaslik: { fontSize: fs(20), fontWeight: '800', marginBottom: sp(4) },
+    modalAciklama: { fontSize: fs(14), fontWeight: '500', marginBottom: spacing.m },
+    modalCanvasKutu: { height: 350, borderWidth: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },
+    modalButonSatiri: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.m },
+    imzaBtn: { flex: 1, paddingVertical: spacing.m, borderRadius: sp(12), alignItems: 'center', justifyContent: 'center' },
+    imzaBtnText: { fontSize: fs(14), fontWeight: '700' },
 });

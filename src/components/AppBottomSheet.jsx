@@ -15,7 +15,7 @@ const AppBottomSheet = forwardRef(function AppBottomSheet({
     enableDynamicSizing = false,
     contentContainerStyle,
     wrapContent = true,
-    keyboardBehavior = 'interactive',
+    keyboardBehavior = 'padding',
     keyboardBlurBehavior = 'restore',
     backgroundStyle,
     handleIndicatorStyle,
