@@ -10,6 +10,7 @@ import {
     View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 import { useTheme } from '@/context/ThemeContext';
@@ -26,10 +27,18 @@ import { fs, sp } from '@/theme/scale';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as IntentLauncher from 'expo-intent-launcher';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import Share from 'react-native-share';
 import { getMapProvider } from '@/config/maps';
+import serviceService from '@/services/serviceService';
 
 dayjs.locale('tr');
+
+const WARRANTY_MONTH_OPTIONS = [6, 12, 24, 36];
 
 const FALLBACK_SERVICE_STATUS_OPTIONS = [
     { key: 'new', label: 'Yeni', color: '#4F7CFF' },
@@ -77,6 +86,8 @@ export default function ServiceDetail({ route, navigation }) {
     const [routeDistance, setRouteDistance] = useState('');
     const [routeDuration, setRouteDuration] = useState('');
     const [geocoding, setGeocoding] = useState(false);
+    const [showDocumentSheet, setShowDocumentSheet] = useState(false);
+    const [selectedWarrantyMonths, setSelectedWarrantyMonths] = useState(24);
 
     const statusSheetRef = useRef(null);
     const technicianSheetRef = useRef(null);
@@ -182,6 +193,81 @@ export default function ServiceDetail({ route, navigation }) {
         const clean = service.customer_phone.replace(/\D/g, '');
         Linking.openURL(`https://wa.me/${clean}`).catch(() => showToast('error', 'Hata', 'WhatsApp açılamadı.'));
     };
+
+    const normalizeWhatsAppPhone = useCallback((phone) => {
+        let digits = String(phone || '').replace(/[^0-9]/g, '');
+        if (digits.startsWith('00')) digits = digits.slice(2);
+        else if (digits.startsWith('0')) digits = '90' + digits.slice(1);
+        if (digits.length === 10 && digits.startsWith('5')) digits = '90' + digits;
+        return digits;
+    }, []);
+
+    const ensureWhatsAppReady = useCallback(async () => {
+        if (Platform.OS !== 'android') return true;
+        const { isInstalled } = await Share.isPackageInstalled('com.whatsapp');
+        if (!isInstalled) {
+            showToast('error', 'Hata', 'WhatsApp yüklü değil.');
+            return false;
+        }
+        return true;
+    }, [showToast]);
+
+    const sharePdfToWhatsApp = useCallback(async ({ fileUri, filename, phone, message }) => {
+        const fileBase64 = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+
+        await Share.shareSingle({
+            social: Share.Social.WHATSAPP,
+            whatsAppNumber: phone,
+            url: `data:application/pdf;base64,${fileBase64}`,
+            type: 'application/pdf',
+            filename,
+            useInternalStorage: true,
+            message,
+        });
+    }, []);
+
+    const shareLocalPdf = useCallback(async ({ fileUri, filename, message }) => {
+        await Share.open({
+            url: fileUri,
+            type: 'application/pdf',
+            filename,
+            useInternalStorage: true,
+            failOnCancel: false,
+            message,
+        });
+    }, []);
+
+    const openLocalPdf = useCallback(async ({ fileUri, dialogTitle }) => {
+        if (Platform.OS === 'android') {
+            const contentUri = await FileSystem.getContentUriAsync(fileUri);
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                data: contentUri,
+                flags: 1,
+                type: 'application/pdf',
+            });
+            return;
+        }
+
+        await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle,
+            UTI: 'com.adobe.pdf',
+        });
+    }, []);
+
+    const printLocalPdf = useCallback(async ({ fileUri }) => {
+        await Print.printAsync({ uri: fileUri });
+    }, []);
+
+    const downloadServiceFormPdfFile = useCallback(async () => {
+        return serviceService.downloadServiceFormPdf(service, { disposition: 'attachment' });
+    }, [service]);
+
+    const downloadWarrantyPdfFile = useCallback(async () => {
+        return serviceService.downloadWarrantyCertificatePdf(service, selectedWarrantyMonths, { disposition: 'attachment' });
+    }, [service, selectedWarrantyMonths]);
 
     const decodePolyline = (encoded) => {
         if (!encoded) return [];
@@ -336,10 +422,174 @@ export default function ServiceDetail({ route, navigation }) {
         });
     };
 
-    const handlePdf = () => {
+    const handlePdf = useCallback(async () => {
         if (!service?.id || !isAdmin) return;
-        showToast('info', 'PDF', 'PDF hazırlanıyor...');
-    };
+
+        const phone = normalizeWhatsAppPhone(service?.customer_phone);
+        if (!phone) {
+            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            return;
+        }
+
+        try {
+            const isReady = await ensureWhatsAppReady();
+            if (!isReady) return;
+
+            showToast('info', 'PDF', 'Servis formu WhatsApp i\u00e7in haz\u0131rlan\u0131yor...');
+            const { uri, filename } = await downloadServiceFormPdfFile();
+            await sharePdfToWhatsApp({
+                fileUri: uri,
+                filename,
+                phone,
+                message: (service?.customer_full_name ? `${service.customer_full_name} ` : '') + 'i\u00e7in servis formu ekte yer almaktad\u0131r.',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Service form WhatsApp share error:', err);
+                showToast('error', 'Hata', 'Servis formu WhatsApp ile g\u00f6nderilemedi.');
+            }
+        }
+    }, [service, isAdmin, normalizeWhatsAppPhone, showToast, ensureWhatsAppReady, sharePdfToWhatsApp, downloadServiceFormPdfFile]);
+
+    const handleServiceFormShare = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Servis Formu', 'Servis formu haz\u0131rlan\u0131yor...');
+            const { uri, filename } = await downloadServiceFormPdfFile();
+            await shareLocalPdf({
+                fileUri: uri,
+                filename,
+                message: 'Servis formu ekte yer almaktad\u0131r.',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Service form share error:', err);
+                showToast('error', 'Hata', 'Servis formu payla\u015f\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, shareLocalPdf, downloadServiceFormPdfFile]);
+
+    const handleServiceFormShow = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Servis Formu', 'Servis formu a\u00e7\u0131l\u0131yor...');
+            const { uri } = await downloadServiceFormPdfFile();
+            await openLocalPdf({
+                fileUri: uri,
+                dialogTitle: 'Servis formu PDF',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Service form open error:', err);
+                showToast('error', 'Hata', 'Servis formu a\u00e7\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, openLocalPdf, downloadServiceFormPdfFile]);
+
+    const handleServiceFormPrint = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Servis Formu', 'Servis formu yazd\u0131rmaya haz\u0131rlan\u0131yor...');
+            const { uri } = await downloadServiceFormPdfFile();
+            await printLocalPdf({ fileUri: uri });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Service form print error:', err);
+                showToast('error', 'Hata', 'Servis formu yazd\u0131r\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, printLocalPdf, downloadServiceFormPdfFile]);
+
+    const handleWarrantyPdfWhatsApp = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        const phone = normalizeWhatsAppPhone(service?.customer_phone);
+        if (!phone) {
+            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            return;
+        }
+
+        try {
+            const isReady = await ensureWhatsAppReady();
+            if (!isReady) return;
+
+            setShowDocumentSheet(false);
+            showToast('info', 'Garanti', 'Garanti belgesi WhatsApp i\u00e7in haz\u0131rlan\u0131yor...');
+            const { uri, filename } = await downloadWarrantyPdfFile();
+            await sharePdfToWhatsApp({
+                fileUri: uri,
+                filename,
+                phone,
+                message: (service?.customer_full_name || '') + (service?.customer_full_name ? ' ' : '') + 'i\u00e7in garanti belgesi ekte yer almaktad\u0131r.',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Warranty certificate WhatsApp share error:', err);
+                showToast('error', 'Hata', 'Garanti belgesi WhatsApp ile g\u00f6nderilemedi.');
+            }
+        }
+    }, [service, isAdmin, normalizeWhatsAppPhone, showToast, ensureWhatsAppReady, sharePdfToWhatsApp, downloadWarrantyPdfFile]);
+
+    const handleWarrantyPdfShare = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Garanti', 'Garanti belgesi haz\u0131rlan\u0131yor...');
+            const { uri, filename } = await downloadWarrantyPdfFile();
+            await shareLocalPdf({
+                fileUri: uri,
+                filename,
+                message: 'Garanti belgesi ekte yer almaktad\u0131r.',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Warranty certificate share error:', err);
+                showToast('error', 'Hata', 'Garanti belgesi payla\u015f\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, shareLocalPdf, downloadWarrantyPdfFile]);
+
+    const handleWarrantyPdfShow = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Garanti', 'Garanti belgesi a\u00e7\u0131l\u0131yor...');
+            const { uri } = await downloadWarrantyPdfFile();
+            await openLocalPdf({
+                fileUri: uri,
+                dialogTitle: 'Garanti belgesi PDF',
+            });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Warranty certificate open error:', err);
+                showToast('error', 'Hata', 'Garanti belgesi a\u00e7\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, openLocalPdf, downloadWarrantyPdfFile]);
+
+    const handleWarrantyPdfPrint = useCallback(async () => {
+        if (!service?.id || !isAdmin) return;
+
+        try {
+            setShowDocumentSheet(false);
+            showToast('info', 'Garanti', 'Garanti belgesi yazd\u0131rmaya haz\u0131rlan\u0131yor...');
+            const { uri } = await downloadWarrantyPdfFile();
+            await printLocalPdf({ fileUri: uri });
+        } catch (err) {
+            if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
+                console.log('Warranty certificate print error:', err);
+                showToast('error', 'Hata', 'Garanti belgesi yazd\u0131r\u0131lamad\u0131.');
+            }
+        }
+    }, [service, isAdmin, showToast, printLocalPdf, downloadWarrantyPdfFile]);
 
     // ── Yüklenme / Hata durumları ──────────────────────────────────────────────
 
@@ -441,7 +691,10 @@ export default function ServiceDetail({ route, navigation }) {
                         <ActionBtn icon="phone-outline" color="#3B82F6" label="Ara" onPress={handleCall} colors={colors} />
                         <ActionBtn icon="navigation-variant-outline" color="#8B5CF6" label="Harita" onPress={handleMap} colors={colors} />
                         {isAdmin && (
-                            <ActionBtn icon="file-pdf-box" color="#EF4444" label="PDF" onPress={handlePdf} colors={colors} />
+                            <>
+                                <ActionBtn icon="file-pdf-box" color="#EF4444" label="PDF" onPress={handlePdf} colors={colors} />
+                                <ActionBtn icon="shield-check-outline" color="#F59E0B" label="Belge" onPress={() => setShowDocumentSheet(true)} colors={colors} />
+                            </>
                         )}
                         <ActionBtn icon="circle-edit-outline" color="#0EA5E9" label="Durum" onPress={() => statusSheetRef.current?.present()} colors={colors} />
                     </View>
@@ -487,6 +740,210 @@ export default function ServiceDetail({ route, navigation }) {
                 selectedTechnicianId={service?.technician}
                 onSelect={handleTechnicianSelect}
             />
+
+            <AppBottomSheet
+                visible={showDocumentSheet}
+                onClose={() => setShowDocumentSheet(false)}
+                snapPoints={['78%']}
+                wrapContent={false}
+            >
+                <BottomSheetScrollView
+                    style={styles.documentSheetScroll}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.documentSheetScrollContent}
+                >
+                    <View style={styles.documentSheet}>
+                        <View style={styles.documentSheetHeader}>
+                            <View style={styles.documentSheetHeaderText}>
+                                <Text style={[styles.documentSheetTitle, { color: colors.text }]}>{'Belge İşlemleri'}</Text>
+                                <Text style={[styles.documentSheetSubtitle, { color: colors.textSecondary }]}>{'Servis formu ve garanti belgesi işlemlerini buradan yönetebilirsiniz.'}</Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setShowDocumentSheet(false)}
+                                style={({ pressed }) => [
+                                    styles.documentCloseButton,
+                                    { backgroundColor: colors.background, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                                ]}
+                            >
+                                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+                            </Pressable>
+                        </View>
+
+                        <Text style={[styles.documentSectionTitle, { color: colors.textSecondary }]}>{'Servis Formu'}</Text>
+
+                        <Pressable
+                            onPress={handlePdf}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }] }>
+                                <MaterialCommunityIcons name="whatsapp" size={20} color="#16A34A" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Servis formu gönder'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF olarak WhatsApp üzerinden müşteriye ilet.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleServiceFormPrint}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }] }>
+                                <MaterialCommunityIcons name="printer-outline" size={20} color="#D97706" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Servis formu yazdır'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını yazdırma ekranında aç.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleServiceFormShow}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                                <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Servis formu göster'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını cihazda görüntüle.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleServiceFormShare}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#7C3AED1A' }] }>
+                                <MaterialCommunityIcons name="file-download-outline" size={20} color="#7C3AED" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Servis formu paylaş'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını cihaz paylaşım seçenekleriyle gönder.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Text style={[styles.documentSectionTitle, { color: colors.textSecondary }]}>{'Garanti Belgesi'}</Text>
+
+                        <View style={styles.warrantyMonthCard}>
+                            <Text style={[styles.warrantyMonthTitle, { color: colors.text }]}>{'Garanti S\u00fcresi'}</Text>
+                            <Text style={[styles.warrantyMonthSubtitle, { color: colors.textSecondary }]}>{'Belge olu\u015fturmadan \u00f6nce ay se\u00e7in.'}</Text>
+                            <View style={styles.warrantyMonthRow}>
+                                {WARRANTY_MONTH_OPTIONS.map((month) => {
+                                    const selected = selectedWarrantyMonths === month;
+                                    return (
+                                        <Pressable
+                                            key={month}
+                                            onPress={() => setSelectedWarrantyMonths(month)}
+                                            style={({ pressed }) => [
+                                                styles.warrantyMonthChip,
+                                                {
+                                                    backgroundColor: selected ? '#2563EB' : colors.background,
+                                                    borderColor: selected ? '#2563EB' : colors.border,
+                                                    opacity: pressed ? 0.85 : 1,
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.warrantyMonthChipText,
+                                                    { color: selected ? '#FFFFFF' : colors.text },
+                                                ]}
+                                            >
+                                                {month}{' Ay'}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        <Pressable
+                            onPress={handleWarrantyPdfWhatsApp}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#22C55E1A' }] }>
+                                <MaterialCommunityIcons name="whatsapp" size={20} color="#16A34A" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi gönder'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF olarak WhatsApp üzerinden müşteriye ilet.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleWarrantyPdfPrint}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#F59E0B1A' }] }>
+                                <MaterialCommunityIcons name="printer-outline" size={20} color="#D97706" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi yazd\u0131r'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyas\u0131n\u0131 yazd\u0131rma ekran\u0131nda a\u00e7.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleWarrantyPdfShow}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                                <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi g\u00f6ster'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyas\u0131n\u0131 cihazda g\u00f6r\u00fcnt\u00fcle.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+
+                        <Pressable
+                            onPress={handleWarrantyPdfShare}
+                            style={({ pressed }) => [
+                                styles.documentOption,
+                                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                            ]}
+                        >
+                            <View style={[styles.documentOptionIcon, { backgroundColor: '#2563EB1A' }] }>
+                                <MaterialCommunityIcons name="file-download-outline" size={20} color="#2563EB" />
+                            </View>
+                            <View style={styles.documentOptionBody}>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi PDF paylaş'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını cihaz paylaşım seçenekleriyle gönder.'}</Text>
+                            </View>
+                            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                    </View>
+                </BottomSheetScrollView>
+            </AppBottomSheet>
 
             <AppBottomSheet
                 visible={showMapModal}
@@ -903,4 +1360,25 @@ const styles = StyleSheet.create({
     mapAddressText: { fontSize: fs(12), fontWeight: '500', lineHeight: sp(18), textAlign: 'center' },
     mapNavBtn: { minHeight: 48, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.s },
     mapNavBtnText: { color: '#fff', fontSize: fs(14), fontWeight: '700' },
+
+    documentSheetScroll: { flex: 1 },
+    documentSheetScrollContent: { paddingHorizontal: spacing.s, paddingBottom: spacing.xl + spacing.l },
+    documentSheet: { gap: spacing.s, paddingHorizontal: spacing.s, paddingBottom: spacing.m },
+    documentSheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.s, marginBottom: spacing.s, paddingLeft: sp(4) },
+    documentSheetHeaderText: { flex: 1, gap: spacing.xs },
+    documentCloseButton: { width: sp(38), height: sp(38), borderRadius: sp(14), borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    documentSheetTitle: { fontSize: fs(16), fontWeight: '800' },
+    documentSheetSubtitle: { fontSize: fs(12), fontWeight: '500', lineHeight: sp(18) },
+    documentSectionTitle: { fontSize: fs(11), fontWeight: '700', marginTop: spacing.s, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.4, paddingLeft: sp(4) },
+    documentOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, borderWidth: 1, borderRadius: sp(16), paddingHorizontal: spacing.m, paddingVertical: spacing.m + 2 },
+    documentOptionIcon: { width: sp(42), height: sp(42), borderRadius: sp(14), alignItems: 'center', justifyContent: 'center' },
+    documentOptionBody: { flex: 1, gap: sp(2), paddingRight: spacing.xs },
+    documentOptionTitle: { fontSize: fs(13), fontWeight: '700' },
+    documentOptionText: { fontSize: fs(11), fontWeight: '500', lineHeight: sp(16) },
+    warrantyMonthCard: { borderRadius: sp(16), paddingHorizontal: spacing.m, paddingVertical: spacing.m, backgroundColor: 'rgba(37,99,235,0.06)', gap: spacing.xs },
+    warrantyMonthTitle: { fontSize: fs(13), fontWeight: '700' },
+    warrantyMonthSubtitle: { fontSize: fs(11), fontWeight: '500', lineHeight: sp(16) },
+    warrantyMonthRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+    warrantyMonthChip: { minWidth: sp(72), paddingHorizontal: spacing.m, paddingVertical: spacing.s, borderRadius: sp(999), borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    warrantyMonthChipText: { fontSize: fs(12), fontWeight: '700' },
 });
