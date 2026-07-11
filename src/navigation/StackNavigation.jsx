@@ -18,6 +18,8 @@ import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
 import ResetPasswordScreen from "@/screens/auth/ResetPasswordScreen";
 import ResetCodeScreen from "@/screens/auth/ResetCodeScreen";
 import AdminTechniciansScreen from "@/screens/admin/AdminTechniciansScreen";
+import AdminEditTechnicianScreen from "@/screens/admin/AdminEditTechnicianScreen";
+import TechnicianDetailScreen from "@/screens/technician/TechnicianDetailScreen";
 import ApprovalPendingUsersScreen from "@/screens/admin/ApprovalPendingUsersScreen";
 import TechnicianLocationsScreen from "@/screens/technician/TechnicianLocationsScreen";
 import PayrollScreen from "@/screens/hr/PayrollScreen";
@@ -73,6 +75,8 @@ const AppStack = () => {
             <Stack.Screen name="AppErrorBoundary" component={AppErrorBoundary} />
             <Stack.Screen name="NetworkStatus" component={NetworkStatus} />
             <Stack.Screen name="AdminTechnicians" component={AdminTechniciansScreen} />
+            <Stack.Screen name="AdminEditTechnician" component={AdminEditTechnicianScreen} />
+            <Stack.Screen name="TechnicianDetail" component={TechnicianDetailScreen} />
             <Stack.Screen name="AdminPendingUsers" component={ApprovalPendingUsersScreen} />
             <Stack.Screen name="TechnicianLocations" component={TechnicianLocationsScreen} />
             <Stack.Screen name="AdminPayroll" component={PayrollScreen} />

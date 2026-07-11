@@ -1,19 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import AppBottomSheet from '@/components/AppBottomSheet';
@@ -21,237 +9,294 @@ import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import WrapperContainer, { NO_BOTTOM_EDGES } from '@/components/WrapperContainer';
 
-const TEXT = {
-  title: 'Teknisyen Detay\u0131',
-  subtitle: 'Operasyon ve yetki y\u00f6netimi',
-  notFound: 'Teknisyen bulunamad\u0131.',
-  noLocation: 'Konum bilgisi yok',
-  defaultRole: 'Elektronik Servis Teknisyeni',
-  phoneMissing: 'Bu teknisyen i\u00e7in telefon numaras\u0131 tan\u0131ml\u0131 de\u011fil.',
-  actionError: '\u0130\u015flem ba\u015flat\u0131lamad\u0131.',
-  loadError: 'Teknisyen bilgileri y\u00fcklenemedi.',
-  permissionSaved: 'Teknisyen yetkileri g\u00fcncellendi.',
-  permissionSaveError: 'Teknisyen yetkileri g\u00fcncellenemedi.',
-  success: 'Ba\u015far\u0131l\u0131',
-  error: 'Hata',
-  missingInfo: 'Bilgi Eksik',
-  online: '\u00c7evrimi\u00e7i',
-  offline: '\u00c7evrimd\u0131\u015f\u0131',
-  passive: 'Pasif',
-  now: '\u015eimdi',
-  justNow: 'Az \u00f6nce',
-  serviceFallback: 'Servis Kayd\u0131',
-  startDate: '\u0130\u015fe ba\u015flang\u0131\u00e7',
-  lastSeen: 'Son g\u00f6r\u00fclme',
-  permissions: 'Yetkiler',
-  edit: 'D\u00fczenle',
-  cancel: 'Vazge\u00e7',
-  save: 'Kaydet',
-  summary: '\u00d6zet',
-  payrollSummary: 'Bordro \u00d6zeti',
-  activeServices: 'Aktif Servisler',
-  noActiveServices: 'Aktif servis bulunamad\u0131.',
-  all: 'T\u00fcm\u00fc',
-  call: 'Ara',
-  message: 'Mesaj',
-  location: 'Konum',
-  shifts: 'Mesailer',
-  completed: 'Tamamlanan',
-  openServices: 'A\u00e7\u0131k Servis',
-  performance: 'Performans',
-  revenue: 'Tahsilat',
-};
-
-const PERMISSION_OPTIONS = [
-  { key: 'can_manage_services', label: 'Servis Y\u00f6netimi', description: 'Servis kay\u0131tlar\u0131n\u0131 g\u00f6r\u00fcnt\u00fcler ve y\u00f6netir.', color: serviceBlue, icon: 'clipboard-text-outline' },
-  { key: 'can_manage_customers', label: 'M\u00fc\u015fteri Y\u00f6netimi', description: 'M\u00fc\u015fteri bilgilerini a\u00e7ar ve g\u00fcnceller.', color: '#06B6D4', icon: 'account-group-outline' },
-  { key: 'can_manage_inventory', label: '\u00dcr\u00fcn Y\u00f6netimi', description: 'Stok ve \u00fcr\u00fcn hareketlerini y\u00f6netir.', color: '#8B5CF6', icon: 'package-variant-closed' },
-  { key: 'can_manage_users', label: 'Kullan\u0131c\u0131 Y\u00f6netimi', description: 'Kullan\u0131c\u0131 hesaplar\u0131 \u00fczerinde i\u015flem yapar.', color: '#EC4899', icon: 'account-cog-outline' },
-  { key: 'can_manage_accounting', label: 'Muhasebe', description: 'Muhasebe ve finans ekranlar\u0131n\u0131 kullan\u0131r.', color: serviceOrange, icon: 'calculator-variant-outline' },
-  { key: 'can_manage_notifications', label: 'Bildirimler', description: 'Bildirim g\u00f6nderim ve ak\u0131\u015flar\u0131n\u0131 y\u00f6netir.', color: '#0EA5E9', icon: 'bell-outline' },
-  { key: 'can_manage_hr', label: '\u0130K \u0130\u015flemleri', description: '\u0130zin, bordro ve insan kaynaklar\u0131 kay\u0131tlar\u0131na eri\u015fir.', color: '#14B8A6', icon: 'briefcase-account-outline' },
-  { key: 'can_manage_reports', label: 'Raporlama', description: 'Rapor ekranlar\u0131n\u0131 ve \u00e7\u0131kt\u0131lar\u0131n\u0131 a\u00e7ar.', color: '#7C3AED', icon: 'chart-box-outline' },
-  { key: 'can_manage_settings', label: 'Ayarlar', description: '\u015eirket ve uygulama ayarlar\u0131n\u0131 y\u00f6netir.', color: '#64748B', icon: 'cog-outline' },
-  { key: 'can_manage_technicians', label: 'Teknisyen Y\u00f6netimi', description: 'Teknisyen operasyonlar\u0131n\u0131 ve konumlar\u0131n\u0131 y\u00f6netir.', color: '#F43F5E', icon: 'shield-account-outline' },
-];
-
-const SERVICE_STATUS = {
-  completed: { label: 'Tamamland\u0131', color: serviceGreen, bg: 'rgba(34,197,94,0.12)' },
-  cancelled: { label: '\u0130ptal', color: serviceRed, bg: 'rgba(239,68,68,0.10)' },
-  in_progress: { label: 'Devam Ediyor', color: serviceBlue, bg: 'rgba(59,130,246,0.12)' },
-  assigned: { label: 'Planland\u0131', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' },
-  new: { label: 'Yeni', color: serviceOrange, bg: 'rgba(249,115,22,0.12)' },
-};
+const ONLINE_GREEN = '#22C55E';
+const PURPLE = '#8B5CF6';
 
 const STATUS_META = {
-  online: { label: TEXT.online, color: serviceGreen, bg: 'rgba(34,197,94,0.12)', dot: serviceGreen },
-  offline: { label: TEXT.offline, color: '#64748B', bg: 'rgba(100,116,139,0.12)', dot: '#94A3B8' },
-  passive: { label: TEXT.passive, color: serviceRed, bg: 'rgba(239,68,68,0.10)', dot: serviceRed },
+    online: { label: 'Çevrimiçi', color: ONLINE_GREEN, bg: 'rgba(34,197,94,0.12)', dot: ONLINE_GREEN },
+    offline: { label: 'Çevrimdışı', color: '#64748B', bg: 'rgba(100,116,139,0.12)', dot: '#94A3B8' },
+    passive: { label: 'Pasif', color: serviceRed, bg: 'rgba(239,68,68,0.10)', dot: serviceRed },
 };
+const SVC_STATUS = {
+    completed: { label: 'Tamamlandı', color: serviceGreen, bg: 'rgba(34,197,94,0.12)' },
+    cancelled: { label: 'İptal', color: serviceRed, bg: 'rgba(239,68,68,0.10)' },
+    in_progress: { label: 'Devam Ediyor', color: serviceBlue, bg: 'rgba(59,130,246,0.12)' },
+    assigned: { label: 'Planlandı', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' },
+    new: { label: 'Yeni', color: serviceOrange, bg: 'rgba(249,115,22,0.12)' },
+};
+const PERMS = [
+    { key: 'can_manage_services', label: 'Servis Yönetimi', icon: 'clipboard-text-outline', color: serviceBlue },
+    { key: 'can_manage_customers', label: 'Müşteri Yönetimi', icon: 'account-group-outline', color: '#06B6D4' },
+    { key: 'can_manage_inventory', label: 'Ürün Yönetimi', icon: 'package-variant-closed', color: PURPLE },
+    { key: 'can_manage_users', label: 'Kullanıcı Yönetimi', icon: 'account-cog-outline', color: '#EC4899' },
+    { key: 'can_manage_accounting', label: 'Muhasebe', icon: 'calculator-variant-outline', color: serviceOrange },
+    { key: 'can_manage_notifications', label: 'Bildirimler', icon: 'bell-outline', color: '#0EA5E9' },
+    { key: 'can_manage_hr', label: 'Maaş/Bordro İşlemleri', icon: 'briefcase-account-outline', color: '#14B8A6' },
+    { key: 'can_manage_reports', label: 'Raporlama', icon: 'chart-box-outline', color: '#7C3AED' },
+    { key: 'can_manage_settings', label: 'Ayarlar', icon: 'cog-outline', color: '#64748B' },
+    { key: 'can_manage_technicians', label: 'Teknisyen Yönetimi', icon: 'shield-account-outline', color: '#F43F5E' },
+];
 
-const money = (value) => `\u20ba${Number(value || 0).toLocaleString('tr-TR')}`;
-const count = (value) => Number(value || 0).toLocaleString('tr-TR');
-const getFullName = (technician) => technician?.full_name || technician?.user?.full_name || [technician?.user?.first_name, technician?.user?.last_name].filter(Boolean).join(' ') || technician?.user?.email || 'Teknisyen';
-const getInitials = (name) => String(name || 'T').split(' ').filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-const getStatusKey = (technician) => (!technician?.user?.is_active ? 'passive' : technician?.is_online ? 'online' : 'offline');
-const normalizePhone = (value) => String(value || '').replace(/[^\d+]/g, '');
-const formatDate = (value) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-const formatDateTime = (value) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return `${date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })} • ${date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-};
-const formatLastSeen = (value, isOnline) => {
-  if (isOnline) return TEXT.now;
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diff < 60) return TEXT.justNow;
-  if (diff < 3600) return `${Math.floor(diff / 60)} dk önce`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} sa önce`;
-  return formatDateTime(value);
-};
-const getServiceTitle = (service) => [service?.fault_description, [service?.device_brand, service?.device_model].filter(Boolean).join(' '), service?.customer_full_name, TEXT.serviceFallback].find(Boolean);
-const getServiceStatus = (service) => SERVICE_STATUS[service?.service_status || (service?.is_completed ? 'completed' : 'assigned')] || { label: 'Servis', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' };
-const getAttendanceHours = (record) => {
-  if (!record?.start_time || !record?.end_time) return 0;
-  const [sh, sm] = String(record.start_time).split(':').map(Number);
-  const [eh, em] = String(record.end_time).split(':').map(Number);
-  if ([sh, sm, eh, em].some(Number.isNaN)) return 0;
-  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60);
-};
-function ActionButton({ icon, label, onPress, colors }) {
-  return <Pressable onPress={onPress} style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name={icon} size={18} color={serviceBlue} /><Text style={[styles.actionText, { color: colors.textSecondary }]}>{label}</Text></Pressable>;
+const money = (v) => '₺' + Number(v || 0).toLocaleString('tr-TR');
+const pct = (v) => '%' + Number(v || 0);
+const getName = (t) => t?.full_name || [t?.user?.first_name, t?.user?.last_name].filter(Boolean).join(' ') || t?.user?.email || 'Teknisyen';
+const initials = (n) => String(n || 'T').split(' ').filter(Boolean).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+const statusKey = (t) => !t?.user?.is_active ? 'passive' : t?.is_online ? 'online' : 'offline';
+const cleanPhone = (v) => String(v || '').replace(/[^0-9+]/g, '');
+const fmtDate = (v) => { if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return '-'; return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }); };
+const fmtDT = (v) => { if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return '-'; return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); };
+const fmtLast = (v, on) => { if (on) return 'Şimdi'; if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return '-'; const s = Math.floor((Date.now() - d) / 1000); if (s < 60) return 'Az önce'; if (s < 3600) return Math.floor(s / 60) + ' dk önce'; if (s < 86400) return Math.floor(s / 3600) + ' sa önce'; return fmtDT(v); };
+const svcTitle = (s) => [s?.fault_description, [s?.device_brand, s?.device_model].filter(Boolean).join(' '), s?.customer_full_name, 'Servis Kaydı'].find(Boolean);
+const svcSt = (s) => SVC_STATUS[s?.service_status || (s?.is_completed ? 'completed' : 'assigned')] || { label: 'Servis', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' };
+const attH = (r) => { if (!r?.start_time || !r?.end_time) return 0; const [sh, sm] = String(r.start_time).split(':').map(Number); const [eh, em] = String(r.end_time).split(':').map(Number); return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60); };
+
+function ABtn({ icon, label, onPress, colors }) {
+    return <Pressable onPress={onPress} style={[S.ab, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name={icon} size={18} color={serviceBlue} /><Text style={[S.abl, { color: colors.textSecondary }]}>{label}</Text></Pressable>;
 }
-function StatCard({ icon, label, value, color, colors }) {
-  return <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.statIcon, { backgroundColor: `${color}14` }]}><MaterialCommunityIcons name={icon} size={18} color={color} /></View><Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text><Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{value}</Text></View>;
+function SBox({ icon, color, label, value, colors }) {
+    return <View style={[S.sb, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[S.si, { backgroundColor: color + '18' }]}><MaterialCommunityIcons name={icon} size={15} color={color} /></View><Text style={[S.sl, { color: colors.textSecondary }]}>{label}</Text><Text style={[S.sv, { color: colors.text }]} numberOfLines={1}>{value}</Text></View>;
 }
-function PermissionRow({ item, enabled, colors }) {
-  return <View style={[styles.permissionRow, { borderColor: enabled ? `${item.color}30` : colors.border, backgroundColor: enabled ? `${item.color}12` : colors.surface }]}><View style={[styles.permissionIcon, { backgroundColor: enabled ? item.color : colors.textTertiary }]}><MaterialCommunityIcons name={item.icon} size={14} color="#fff" /></View><View style={styles.permissionBody}><Text style={[styles.permissionTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.permissionDescription, { color: colors.textSecondary }]}>{item.description}</Text></View><MaterialCommunityIcons name={enabled ? 'check-circle' : 'close-circle-outline'} size={18} color={enabled ? item.color : colors.textTertiary} /></View>;
+function SHdr({ title, action, onAction, colors }) {
+    return <View style={S.shr}><Text style={[S.st, { color: colors.text }]}>{title}</Text>{action ? <Pressable onPress={onAction}><Text style={[S.slink, { color: serviceBlue }]}>{action}</Text></Pressable> : null}</View>;
 }
-function PermissionEditorRow({ item, value, onToggle, colors }) {
-  return <Pressable onPress={() => onToggle(item.key)} style={[styles.permissionRow, { borderColor: value ? `${item.color}30` : colors.border, backgroundColor: value ? `${item.color}12` : colors.surface }]}><View style={[styles.permissionIcon, { backgroundColor: value ? item.color : colors.textTertiary }]}><MaterialCommunityIcons name={item.icon} size={14} color="#fff" /></View><View style={styles.permissionBody}><Text style={[styles.permissionTitle, { color: colors.text }]}>{item.label}</Text><Text style={[styles.permissionDescription, { color: colors.textSecondary }]}>{item.description}</Text></View><View style={[styles.switchTrack, { backgroundColor: value ? item.color : colors.border }]}><View style={[styles.switchKnob, value ? styles.switchKnobActive : null]} /></View></Pressable>;
+function PR({ item, enabled, colors }) {
+    const activeColor = serviceGreen;
+    return <View style={[S.pr, { backgroundColor: enabled ? activeColor + '12' : colors.surface, borderColor: enabled ? activeColor + '30' : colors.border }]}><View style={[S.pi, { backgroundColor: enabled ? activeColor : colors.textTertiary }]}><MaterialCommunityIcons name={item.icon} size={13} color='#fff' /></View><Text style={[S.pl, { color: enabled ? colors.text : colors.textSecondary }]}>{item.label}</Text><MaterialCommunityIcons name={enabled ? 'check-circle' : 'close-circle-outline'} size={16} color={enabled ? activeColor : colors.textTertiary} /></View>;
+}
+function PER({ item, value, onToggle, colors }) {
+    return <Pressable onPress={() => onToggle(item.key)} style={[S.pr, { backgroundColor: value ? item.color + '12' : colors.surface, borderColor: value ? item.color + '30' : colors.border }]}><View style={[S.pi, { backgroundColor: value ? item.color : colors.textTertiary }]}><MaterialCommunityIcons name={item.icon} size={13} color='#fff' /></View><Text style={[S.pl, { color: value ? colors.text : colors.textSecondary, flex: 1 }]}>{item.label}</Text><View style={[S.swt, { backgroundColor: value ? item.color : colors.border }]}><View style={[S.swk, value && S.swko]} /></View></Pressable>;
 }
 
 export default function TechnicianDetailScreen({ navigation, route }) {
-  const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const { showToast } = useToast();
-  const technicianId = route?.params?.technicianId || route?.params?.id || route?.params?.technician?.id || null;
-  const initialTechnician = route?.params?.technician || null;
-  const [technician, setTechnician] = useState(initialTechnician);
-  const [performance, setPerformance] = useState(null);
-  const [payrolls, setPayrolls] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [loading, setLoading] = useState(!initialTechnician);
-  const [refreshing, setRefreshing] = useState(false);
-  const [permissionsVisible, setPermissionsVisible] = useState(false);
-  const [draftPermissions, setDraftPermissions] = useState({});
-  const [savingPermissions, setSavingPermissions] = useState(false);
+    const { colors } = useTheme();
+    const { showToast } = useToast();
+    const tid = route?.params?.technicianId || route?.params?.id || route?.params?.technician?.id || null;
+    const [tech, setTech] = useState(route?.params?.technician || null);
+    const [perf, setPerf] = useState(null);
+    const [pays, setPays] = useState([]);
+    const [att, setAtt] = useState([]);
+    const [loading, setLoading] = useState(!route?.params?.technician);
+    const [refreshing, setRefreshing] = useState(false);
+    const [pSheet, setPSheet] = useState(false);
+    const [draft, setDraft] = useState({});
+    const [saving, setSaving] = useState(false);
+    const TABS = ['Genel', 'Servisler', 'Yetkiler', 'Bordro'];
+    const [tab, setTab] = useState('Genel');
 
-  const fetchData = useCallback(async () => {
-    if (!technicianId) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    try {
-      const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const [technicianRes, performanceRes, payrollRes, attendanceRes] = await Promise.all([
-        api.get(ENDPOINTS.TECHNICIAN.DETAIL(technicianId)),
-        api.get(ENDPOINTS.REPORTS.TECHNICIAN_DETAIL(technicianId), { params: { year: now.getFullYear(), month: now.getMonth() + 1 } }).catch(() => ({ data: null })),
-        api.get(ENDPOINTS.HR.PAYROLLS, { params: { technician: technicianId } }).catch(() => ({ data: [] })),
-        api.get('technicians/attendance/', { params: { technician: technicianId, month, include_shift: 'false' } }).catch(() => ({ data: [] })),
-      ]);
-      setTechnician(technicianRes?.data || null);
-      setPerformance(performanceRes?.data || null);
-      const payrollList = Array.isArray(payrollRes?.data) ? payrollRes.data : payrollRes?.data?.results || [];
-      const attendanceList = Array.isArray(attendanceRes?.data) ? attendanceRes.data : [];
-      setPayrolls(payrollList.slice().sort((a, b) => new Date(b.period_start || 0) - new Date(a.period_start || 0)));
-      setAttendance(attendanceList.slice().sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
-    } catch (error) {
-      console.log('Technician detail fetch error:', error?.response?.data || error?.message || error);
-      showToast('error', TEXT.error, TEXT.loadError);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [showToast, technicianId]);
+    const fetch = useCallback(async () => {
+        if (!tid) { setLoading(false); setRefreshing(false); return; }
+        try {
+            const now = new Date();
+            const mo = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            const [tR, pR, payR, aR] = await Promise.all([
+                api.get(ENDPOINTS.TECHNICIAN.DETAIL(tid)),
+                api.get(ENDPOINTS.REPORTS.TECHNICIAN_DETAIL(tid), { params: { year: now.getFullYear(), month: now.getMonth() + 1 } }).catch(() => ({ data: null })),
+                api.get(ENDPOINTS.HR.PAYROLLS, { params: { technician: tid } }).catch(() => ({ data: [] })),
+                api.get('technicians/attendance/', { params: { technician: tid, month: mo, include_shift: 'false' } }).catch(() => ({ data: [] })),
+            ]);
+            setTech(tR?.data || null);
+            setPerf(pR?.data || null);
+            const pl = Array.isArray(payR?.data) ? payR.data : (payR?.data?.results || []);
+            setPays(pl.sort((a, b) => new Date(b.period_start || 0) - new Date(a.period_start || 0)));
+            setAtt(Array.isArray(aR?.data) ? aR.data : []);
+        } catch { showToast('error', 'Hata', 'Yükleme hatası.'); }
+        finally { setLoading(false); setRefreshing(false); }
+    }, [tid, showToast]);
 
-  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+    useFocusEffect(useCallback(() => { fetch(); }, [fetch]));
 
-  const profile = useMemo(() => {
-    const name = getFullName(technician);
-    const permissions = technician?.permissions || {};
-    const statusKey = getStatusKey(technician);
-    return {
-      name,
-      initials: getInitials(name),
-      avatar: resolveMediaUrl(technician?.user?.profile_picture || technician?.user?.avatar || technician?.user?.avatar_url || technician?.avatar),
-      phone: technician?.user?.phone_number || technician?.phone_number || '',
-      role: technician?.title || technician?.user?.user_type_display || TEXT.defaultRole,
-      email: technician?.user?.email || technician?.email || '-',
-      location: technician?.current_location?.address || technician?.location || technician?.address || TEXT.noLocation,
-      permissions,
-      status: STATUS_META[statusKey] || STATUS_META.offline,
-      isOnline: statusKey === 'online',
-      activePermissions: PERMISSION_OPTIONS.filter((item) => Boolean(permissions[item.key])),
+    React.useEffect(() => {
+        if (route?.params?.openPermissionsSheet && tech) {
+            setDraft({ ...(tech?.permissions || {}) });
+            setPSheet(true);
+            navigation.setParams({ openPermissionsSheet: undefined });
+        }
+    }, [route?.params?.openPermissionsSheet, tech]);
+
+    const p = useMemo(() => {
+        const name = getName(tech);
+        const sk = statusKey(tech);
+        const perms = tech?.permissions || {};
+        return { name, initials: initials(name), avatar: resolveMediaUrl(tech?.user?.avatar_url || tech?.user?.avatar || tech?.avatar), phone: tech?.user?.phone_number || '', role: tech?.title || tech?.user?.user_type_display || 'Servis Teknisyeni', email: tech?.user?.email || '', status: STATUS_META[sk] || STATUS_META.offline, isOnline: sk === 'online', perms };
+    }, [tech]);
+
+    const svcs = Array.isArray(perf?.services) ? perf.services : [];
+    const actSvcs = svcs.filter((s) => !s?.is_completed && s?.service_status !== 'cancelled');
+    const cc = Number(perf?.completed_services_count || 0);
+    const pc = Number(perf?.pending_services_count || 0);
+    const ts = cc + pc;
+    const cr = ts ? Math.round((cc / ts) * 100) : 0;
+    const rev = Number(perf?.total_revenue_generated || 0);
+    const lp = pays[0] || null;
+    const lv = att.filter((r) => ['leave', 'sick', 'offday'].includes(r?.status)).length;
+
+    const call = (sc) => {
+        const ph = cleanPhone(p.phone);
+        if (!ph) { showToast('error', 'Eksik', 'Telefon numarası tanımlı değil.'); return; }
+        if (sc === 'whatsapp') {
+            let formattedPhone = ph;
+            if (!formattedPhone.startsWith('+') && !formattedPhone.startsWith('90')) {
+                formattedPhone = '90' + formattedPhone;
+            }
+            Linking.openURL(`whatsapp://send?phone=${formattedPhone.replace('+', '')}`).catch(() => {
+                Linking.openURL(`https://wa.me/${formattedPhone.replace('+', '')}`).catch(() => {
+                    showToast('error', 'Hata', 'WhatsApp açılamadı.');
+                });
+            });
+        } else {
+            Linking.openURL(sc + ':' + ph).catch(() => { });
+        }
     };
-  }, [technician]);
+    const openPE = () => { setDraft({ ...p.perms }); setPSheet(true); };
+    const togP = (k) => setDraft((d) => ({ ...d, [k]: !d[k] }));
+    const saveP = async () => {
+        if (!tid) return; setSaving(true);
+        try { const r = await api.patch(ENDPOINTS.TECHNICIAN.PERMISSIONS(tid), draft); const u = r?.data?.permissions || r?.data || draft; setTech((prev) => prev ? { ...prev, permissions: { ...(prev.permissions || {}), ...u } } : prev); setPSheet(false); showToast('success', 'Başarılı', 'Yetkiler güncellendi.'); }
+        catch (e) { showToast('error', 'Hata', e?.response?.data?.detail || 'Hata.'); }
+        finally { setSaving(false); }
+    };
 
-  const services = Array.isArray(performance?.services) ? performance.services : [];
-  const activeServices = services.filter((service) => !service?.is_completed && service?.service_status !== 'cancelled');
-  const completedServices = Number(performance?.completed_services_count || 0);
-  const pendingServices = Number(performance?.pending_services_count || 0);
-  const totalServices = completedServices + pendingServices;
-  const completionRate = totalServices ? Math.round((completedServices / totalServices) * 100) : 0;
-  const latestPayroll = payrolls[0] || null;
-  const leaveCount = attendance.filter((item) => ['leave', 'sick', 'offday'].includes(item?.status)).length;
-  const overtimeHours = attendance.reduce((sum, item) => item?.status !== 'worked' ? sum : sum + Math.max(0, getAttendanceHours(item) - 9), 0);
-  const collectionAmount = Number(performance?.total_revenue_generated || 0);
+    if (loading && !tech) return <View style={[S.c, { backgroundColor: colors.backgroundSecondary }]}><ActivityIndicator size='large' color={serviceBlue} /></View>;
+    if (!tech) return <View style={[S.c, { backgroundColor: colors.backgroundSecondary }]}><Text style={{ color: colors.textSecondary }}>Teknisyen bulunamadı.</Text></View>;
 
-  const openPhoneUrl = (scheme) => {
-    const phone = normalizePhone(profile.phone);
-    if (!phone) {
-      showToast('error', TEXT.missingInfo, TEXT.phoneMissing);
-      return;
-    }
-    Linking.openURL(`${scheme}:${phone}`).catch(() => showToast('error', TEXT.error, TEXT.actionError));
-  };
-  const openPermissionEditor = () => { setDraftPermissions({ ...profile.permissions }); setPermissionsVisible(true); };
-  const togglePermission = (key) => setDraftPermissions((prev) => ({ ...prev, [key]: !prev[key] }));
-  const savePermissions = async () => {
-    if (!technicianId) return;
-    setSavingPermissions(true);
-    try {
-      const response = await api.patch(ENDPOINTS.TECHNICIAN.PERMISSIONS(technicianId), draftPermissions);
-      const updatedPermissions = response?.data?.permissions || response?.data || draftPermissions;
-      setTechnician((prev) => prev ? ({ ...prev, permissions: { ...(prev.permissions || {}), ...updatedPermissions } }) : prev);
-      setPermissionsVisible(false);
-      showToast('success', TEXT.success, TEXT.permissionSaved);
-    } catch (error) {
-      console.log('Technician permissions save error:', error?.response?.data || error?.message || error);
-      showToast('error', TEXT.error, error?.response?.data?.detail || TEXT.permissionSaveError);
-    } finally {
-      setSavingPermissions(false);
-    }
-  };
+    const SRow = ({ s }) => { const st = svcSt(s); return <Pressable onPress={() => navigation.navigate('ServiceDetail', { serviceId: s.id, service: s })} style={[S.svr, { borderBottomColor: colors.border }]}><View style={[S.sdi, { backgroundColor: serviceBlue + '14' }]}><MaterialCommunityIcons name='tools' size={15} color={serviceBlue} /></View><View style={S.svb}><Text style={[S.svt, { color: colors.text }]} numberOfLines={1}>{svcTitle(s)}</Text><Text style={[S.svm, { color: colors.textSecondary }]} numberOfLines={1}>{fmtDT(s?.scheduled_date)}</Text></View><View style={[S.pill, { backgroundColor: st.bg }]}><Text style={[S.pillT, { color: st.color }]}>{st.label}</Text></View><MaterialCommunityIcons name='chevron-right' size={15} color={colors.textTertiary} /></Pressable>; };
 
-  if (loading && !technician) return <View style={[styles.center, { backgroundColor: colors.backgroundSecondary }]}><ActivityIndicator size="large" color={serviceBlue} /></View>;
-  if (!technician) return <View style={[styles.center, { backgroundColor: colors.backgroundSecondary }]}><Text style={{ color: colors.textSecondary }}>{TEXT.notFound}</Text></View>;
+    const G = () => <React.Fragment>
+        <View style={S.sg}><SBox icon='calendar-check-outline' color={serviceBlue} label='Bu Ay Servis' value={String(ts)} colors={colors} /><SBox icon='check-circle-outline' color={serviceGreen} label='Tamamlanan' value={String(cc)} colors={colors} /><SBox icon='chart-line-variant' color={PURPLE} label='Performans' value={pct(cr)} colors={colors} /><SBox icon='cash-multiple' color={serviceOrange} label='Bu Ay Kazanç' value={money(rev)} colors={colors} /></View>
+        <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='Aktif Servisler' action={actSvcs.length > 0 ? 'Tümünü Gör' : undefined} onAction={() => setTab('Servisler')} colors={colors} />{actSvcs.length === 0 ? <Text style={[S.empty, { color: colors.textSecondary }]}>Aktif servis yok.</Text> : actSvcs.slice(0, 4).map((s) => <SRow key={String(s.id)} s={s} />)}</View>
 
-  return <View style={[styles.screen, { backgroundColor: colors.backgroundSecondary }]}><View style={[styles.header, { paddingTop: insets.top + 8 }]}><Pressable onPress={() => navigation.goBack()} style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="arrow-left" size={22} color={serviceBlue} /></Pressable><View style={styles.headerText}><Text style={[styles.headerTitle, { color: colors.text }]}>{TEXT.title}</Text><Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{TEXT.subtitle}</Text></View><Pressable onPress={openPermissionEditor} style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="shield-edit-outline" size={22} color={serviceBlue} /></Pressable></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} colors={[serviceBlue]} />}><View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.heroTop}><View style={styles.avatarWrap}>{profile.avatar ? <Image source={{ uri: profile.avatar }} style={styles.avatar} /> : <View style={[styles.avatarFallback, { backgroundColor: `${serviceBlue}14` }]}><Text style={[styles.avatarText, { color: serviceBlue }]}>{profile.initials}</Text></View>}<View style={[styles.onlineDot, { backgroundColor: profile.status.dot, borderColor: colors.surface }]} /></View><View style={styles.heroBody}><Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{profile.name}</Text><Text style={[styles.role, { color: colors.textSecondary }]} numberOfLines={1}>{profile.role}</Text><Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>{profile.location}</Text><Text style={[styles.metaText, { color: colors.textTertiary }]} numberOfLines={1}>{profile.email}</Text></View><View style={[styles.statusBadge, { backgroundColor: profile.status.bg }]}><Text style={[styles.statusText, { color: profile.status.color }]}>{profile.status.label}</Text></View></View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.infoRow}><View style={styles.infoItem}><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{TEXT.startDate}</Text><Text style={[styles.infoValue, { color: colors.text }]}>{formatDate(technician?.hire_date || technician?.created_at)}</Text></View><View style={styles.infoItem}><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{TEXT.lastSeen}</Text><Text style={[styles.infoValue, { color: profile.isOnline ? serviceGreen : colors.text }]}>{formatLastSeen(technician?.last_online, profile.isOnline)}</Text></View></View><View style={styles.actionsRow}><ActionButton icon="phone-outline" label={TEXT.call} onPress={() => openPhoneUrl('tel')} colors={colors} /><ActionButton icon="message-text-outline" label={TEXT.message} onPress={() => openPhoneUrl('sms')} colors={colors} /><ActionButton icon="map-marker-radius-outline" label={TEXT.location} onPress={() => navigation.navigate('TechnicianLocations', { technicianId, technicianName: profile.name })} colors={colors} /><ActionButton icon="clock-outline" label={TEXT.shifts} onPress={() => navigation.navigate('TechnicianShifts', { technicianId, technicianName: profile.name })} colors={colors} /></View></View><View style={styles.statsGrid}><StatCard icon="clipboard-check-outline" label={TEXT.completed} value={count(completedServices)} color={serviceGreen} colors={colors} /><StatCard icon="progress-clock" label={TEXT.openServices} value={count(pendingServices)} color={serviceOrange} colors={colors} /><StatCard icon="chart-line-variant" label={TEXT.performance} value={`%${completionRate}`} color="#8B5CF6" colors={colors} /><StatCard icon="cash-multiple" label={TEXT.revenue} value={money(collectionAmount)} color={serviceBlue} colors={colors} /></View><View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.text }]}>{TEXT.summary}</Text><View style={styles.summaryGrid}><View style={styles.summaryItem}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Toplam servis</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{count(totalServices)}</Text></View><View style={styles.summaryItem}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Aktif yetki</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{count(profile.activePermissions.length)}</Text></View><View style={styles.summaryItem}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Fazla mesai</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{`${overtimeHours.toFixed(1)} sa`}</Text></View><View style={styles.summaryItem}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>İzin günü</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{count(leaveCount)}</Text></View></View></View><View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.text }]}>{TEXT.payrollSummary}</Text><Pressable onPress={() => navigation.navigate('AdminPayroll', { technicianId, technicianName: profile.name })}><Text style={[styles.sectionLink, { color: serviceBlue }]}>{TEXT.all}</Text></Pressable></View><View style={styles.payrollRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Net ödeme</Text><Text style={[styles.payrollValue, { color: colors.text }]}>{money(latestPayroll?.net_salary)}</Text></View><View style={styles.payrollRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Maaş</Text><Text style={[styles.summaryText, { color: colors.text }]}>{money(latestPayroll?.base_salary)}</Text></View><View style={styles.payrollRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Prim</Text><Text style={[styles.summaryText, { color: serviceGreen }]}>{money(latestPayroll?.total_premiums)}</Text></View><View style={styles.payrollRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Kesinti</Text><Text style={[styles.summaryText, { color: serviceRed }]}>{money(latestPayroll?.total_deductions)}</Text></View></View><View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.text }]}>{TEXT.permissions}</Text><Pressable onPress={openPermissionEditor}><Text style={[styles.sectionLink, { color: serviceBlue }]}>{TEXT.edit}</Text></Pressable></View><View style={styles.listGap}>{PERMISSION_OPTIONS.map((item) => <PermissionRow key={item.key} item={item} enabled={Boolean(profile.permissions[item.key])} colors={colors} />)}</View></View><View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.text }]}>{TEXT.activeServices}</Text><Text style={[styles.sectionMeta, { color: colors.textSecondary }]}>{`${activeServices.length} kayıt`}</Text></View>{activeServices.length === 0 ? <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{TEXT.noActiveServices}</Text> : activeServices.slice(0, 4).map((service) => { const status = getServiceStatus(service); return <Pressable key={String(service.id)} onPress={() => navigation.navigate('ServiceDetail', { serviceId: service.id, service })} style={[styles.serviceRow, { borderBottomColor: colors.border }]}><View style={styles.serviceBody}><Text style={[styles.serviceTitle, { color: colors.text }]} numberOfLines={1}>{getServiceTitle(service)}</Text><Text style={[styles.serviceMeta, { color: colors.textSecondary }]} numberOfLines={1}>{formatDateTime(service?.scheduled_date)}</Text></View><View style={[styles.servicePill, { backgroundColor: status.bg }]}><Text style={[styles.servicePillText, { color: status.color }]}>{status.label}</Text></View></Pressable>; })}</View></ScrollView><AppBottomSheet visible={permissionsVisible} onClose={() => setPermissionsVisible(false)} snapPoints={['78%']}><View style={styles.sheetContent}><View style={styles.sectionHeader}><Text style={[styles.sheetTitle, { color: colors.text }]}>{`${TEXT.permissions} ${TEXT.edit}`}</Text><Pressable onPress={() => setPermissionsVisible(false)}><MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} /></Pressable></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listGap}>{PERMISSION_OPTIONS.map((item) => <PermissionEditorRow key={item.key} item={item} value={Boolean(draftPermissions[item.key])} onToggle={togglePermission} colors={colors} />)}</ScrollView><View style={styles.sheetButtons}><Pressable onPress={() => setPermissionsVisible(false)} style={[styles.secondaryButton, { borderColor: colors.border }]}><Text style={[styles.secondaryText, { color: colors.textSecondary }]}>{TEXT.cancel}</Text></Pressable><Pressable onPress={savePermissions} disabled={savingPermissions} style={[styles.primaryButton, { backgroundColor: serviceBlue, opacity: savingPermissions ? 0.7 : 1 }]}>{savingPermissions ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.primaryText}>{TEXT.save}</Text>}</Pressable></View></View></AppBottomSheet></View>;
+        {lp && <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='Bordro Özeti' colors={colors} /><View style={S.prows}><View style={S.prow}><Text style={[S.plabel, { color: colors.textSecondary }]}>Maaş</Text><Text style={[S.pval, { color: colors.text }]}>{money(lp?.base_salary)}</Text></View><View style={S.prow}><Text style={[S.plabel, { color: colors.textSecondary }]}>Prim</Text><Text style={[S.pval, { color: serviceGreen }]}>{money(lp?.total_premiums)}</Text></View><View style={S.prow}><Text style={[S.plabel, { color: colors.textSecondary }]}>Kesinti</Text><Text style={[S.pval, { color: serviceRed }]}>{money(lp?.total_deductions)}</Text></View><View style={[S.pdiv, { backgroundColor: colors.border }]} /><View style={S.prow}><Text style={[S.pnl, { color: colors.text }]}>Net Bordro</Text><Text style={[S.pn, { color: colors.text }]}>{money(lp?.net_salary)}</Text></View><Pressable onPress={() => navigation.navigate('AdminPayroll', { technicianId: tid, technicianName: p.name })} style={S.pdb}><MaterialCommunityIcons name='file-document-outline' size={13} color={serviceBlue} /><Text style={[S.pdt, { color: serviceBlue }]}>Bordro Detayı</Text><MaterialCommunityIcons name='chevron-right' size={13} color={serviceBlue} /></Pressable></View></View>}
+
+        <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='İzin ve Mesai' colors={colors} /><View style={S.lr}><View style={S.li}><View style={[S.lib, { backgroundColor: serviceGreen + '14' }]}><MaterialCommunityIcons name='clock-outline' size={18} color={serviceGreen} /></View><Text style={[S.ll, { color: colors.textSecondary }]}>Mesai</Text><Text style={[S.lv, { color: colors.text }]}>{att.filter(r => r?.status === 'worked').length} gün</Text></View><View style={S.li}><View style={[S.lib, { backgroundColor: serviceOrange + '14' }]}><MaterialCommunityIcons name='calendar-check' size={18} color={serviceOrange} /></View><Text style={[S.ll, { color: colors.textSecondary }]}>İzin</Text><Text style={[S.lv, { color: colors.text }]}>{lv} gün</Text></View></View></View>
+    </React.Fragment>;
+
+    const Sv = () => <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='Tüm Servisler' colors={colors} />{svcs.length === 0 ? <Text style={[S.empty, { color: colors.textSecondary }]}>Servis yok.</Text> : svcs.slice(0, 20).map((s) => <SRow key={String(s.id)} s={s} />)}</View>;
+
+    const Perm = () => <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='Yetkiler' action='Düzenle' onAction={openPE} colors={colors} /><View style={S.plist}>{PERMS.map((o) => <PR key={o.key} item={o} enabled={Boolean(p.perms[o.key])} colors={colors} />)}</View></View>;
+
+    const Pay = () => <View style={[S.card, { backgroundColor: colors.surface, borderColor: colors.border }]}><SHdr title='Bordro Kayıtları' action={pays.length > 0 ? 'Tümü' : undefined} onAction={() => navigation.navigate('AdminPayroll', { technicianId: tid, technicianName: p.name })} colors={colors} />{pays.length === 0 ? <Text style={[S.empty, { color: colors.textSecondary }]}>Bordro yok.</Text> : pays.slice(0, 6).map((py) => <Pressable key={String(py.id)} onPress={() => navigation.navigate('TechnicianPayrollDetail', { payrollId: py.id })} style={[S.plr, { borderBottomColor: colors.border }]}><View style={[S.pli, { backgroundColor: serviceBlue + '14' }]}><MaterialCommunityIcons name='calendar-text-outline' size={16} color={serviceBlue} /></View><View style={S.plb}><Text style={[S.plm, { color: colors.text }]}>{py?.period_start ? fmtDate(py.period_start) : '-'}</Text><Text style={[S.pls, { color: colors.textSecondary }]}>{py?.period_start && py?.period_end ? fmtDate(py.period_start) + ' - ' + fmtDate(py.period_end) : ''}</Text></View><Text style={[S.pla, { color: serviceGreen }]}>{money(py?.net_salary)}</Text><MaterialCommunityIcons name='chevron-right' size={15} color={colors.textTertiary} /></Pressable>)}</View>;
+
+    return (
+        <WrapperContainer>
+
+            <View style={[S.screen, { backgroundColor: colors.backgroundSecondary }]}>
+                <View style={[S.topBar, { backgroundColor: colors.backgroundSecondary }]}>
+                    <Pressable onPress={() => navigation.goBack()} style={[S.ib, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name='arrow-left' size={22} color={serviceBlue} /></Pressable>
+                    <View style={{ flex: 1 }}><Text style={[S.tbt, { color: colors.text }]}>Teknisyen Detayı</Text><Text style={[S.tbs, { color: colors.textSecondary }]}>Operasyon ve yetki yönetimi</Text></View>
+                    <Pressable onPress={() => navigation.navigate('AdminEditTechnician', { technicianId: tid, technician: tech, onSuccess: (updated) => setTech(updated) })} style={[S.ib, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name='pencil-outline' size={22} color={serviceBlue} /></Pressable>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[S.scroll]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetch(); }} colors={[serviceBlue]} />}>
+                    <View style={[S.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <View style={S.htop}>
+                            <View style={S.aw}>{p.avatar ? <Image source={{ uri: p.avatar }} style={S.av} /> : <View style={[S.avf, { backgroundColor: serviceBlue + '18' }]}><Text style={[S.avi, { color: serviceBlue }]}>{p.initials}</Text></View>}<View style={[S.od, { backgroundColor: p.status.dot, borderColor: colors.surface }]} /></View>
+                            <View style={S.hi}><Text style={[S.hn, { color: colors.text }]} numberOfLines={1}>{p.name}</Text><Text style={[S.hr2, { color: colors.textSecondary }]} numberOfLines={1}>{p.role}</Text>{p.email ? <Text style={[S.he, { color: colors.textTertiary }]} numberOfLines={1}>{p.email}</Text> : null}</View>
+                            <View style={[S.badge, { backgroundColor: p.status.bg }]}><Text style={[S.badgeT, { color: p.status.color }]}>{p.status.label}</Text></View>
+                        </View>
+                        <View style={[S.div, { backgroundColor: colors.border }]} />
+                        <View style={S.irow}>
+                            <View style={S.iitem}><MaterialCommunityIcons name='clock-outline' size={14} color={colors.textSecondary} /><View><Text style={[S.ilabel, { color: colors.textSecondary }]}>İşe Başlangıç</Text><Text style={[S.ival, { color: colors.text }]}>{fmtDate(tech?.hire_date || tech?.created_at)}</Text></View></View>
+                            <View style={S.iitem}><View style={[S.lsd, { backgroundColor: p.isOnline ? ONLINE_GREEN : '#94A3B8' }]} /><View><Text style={[S.ilabel, { color: colors.textSecondary }]}>Son Görülme</Text><Text style={[S.ival, { color: p.isOnline ? ONLINE_GREEN : colors.text }]}>{fmtLast(tech?.last_online, p.isOnline)}</Text></View></View>
+                        </View>
+                        <View style={S.ar}>
+                            <ABtn icon='phone-outline' label='Ara' onPress={() => call('tel')} colors={colors} />
+                            <ABtn icon='whatsapp' label='WhatsApp' onPress={() => call('whatsapp')} colors={colors} />
+                            <ABtn icon='map-marker-radius-outline' label='Konum' onPress={() => navigation.navigate('TechnicianLocations', { technicianId: tid, technicianName: p.name })} colors={colors} />
+                            <ABtn icon='clock-outline' label='Mesailer' onPress={() => navigation.navigate('TechnicianShifts', { technicianId: tid, technicianName: p.name })} colors={colors} />
+                        </View>
+                    </View>
+                    <View style={[S.tabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>{TABS.map((t2) => <Pressable key={t2} onPress={() => setTab(t2)} style={[S.ti, tab === t2 && { borderBottomColor: serviceBlue, borderBottomWidth: 2 }]}><Text style={[S.tt, { color: tab === t2 ? serviceBlue : colors.textSecondary }, tab === t2 && S.tta]}>{t2}</Text></Pressable>)}</View>
+                    {tab === 'Genel' && <G />}
+                    {tab === 'Servisler' && <Sv />}
+                    {tab === 'Yetkiler' && <Perm />}
+                    {tab === 'Bordro' && <Pay />}
+                </ScrollView>
+                <AppBottomSheet visible={pSheet} onClose={() => setPSheet(false)} snapPoints={['80%']} wrapContent={false}>
+                    <View style={[S.shc, { flex: 1 }]}>
+                        <View style={S.shtr}><Text style={[S.shtt, { color: colors.text }]}>Yetki Düzenle</Text><Pressable onPress={() => setPSheet(false)}><MaterialCommunityIcons name='close' size={20} color={colors.textSecondary} /></Pressable></View>
+                        <BottomSheetScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[S.plist, { paddingBottom: 16 }]}>
+                            {PERMS.map((o) => <PER key={o.key} item={o} value={Boolean(draft[o.key])} onToggle={togP} colors={colors} />)}
+                            <View style={[S.shbs, { marginTop: 8 }]}><Pressable onPress={() => setPSheet(false)} style={[S.cbtn, { borderColor: colors.border }]}><Text style={[S.cbtnT, { color: colors.textSecondary }]}>Vazgeç</Text></Pressable><Pressable onPress={saveP} disabled={saving} style={[S.savbtn, { backgroundColor: serviceBlue, opacity: saving ? 0.7 : 1 }]}>{saving ? <ActivityIndicator size='small' color='#fff' /> : <Text style={S.savbtnT}>Kaydet</Text>}</Pressable></View>
+                        </BottomSheetScrollView>
+                    </View>
+                </AppBottomSheet>
+            </View>
+        </WrapperContainer>
+
+    );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, header: { paddingHorizontal: 20, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, headerText: { flex: 1 }, headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }, headerSubtitle: { marginTop: 4, fontSize: 14, fontWeight: '500' }, iconButton: { width: 46, height: 46, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, content: { paddingHorizontal: 20, gap: 16 }, heroCard: { borderRadius: 28, borderWidth: 1, padding: 18, gap: 16 }, heroTop: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' }, avatarWrap: { position: 'relative' }, avatar: { width: 82, height: 82, borderRadius: 26 }, avatarFallback: { width: 82, height: 82, borderRadius: 26, alignItems: 'center', justifyContent: 'center' }, avatarText: { fontSize: 28, fontWeight: '800' }, onlineDot: { position: 'absolute', right: 2, bottom: 2, width: 16, height: 16, borderRadius: 8, borderWidth: 3 }, heroBody: { flex: 1, gap: 6 }, name: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }, role: { fontSize: 15, fontWeight: '600' }, metaText: { fontSize: 13, fontWeight: '500' }, statusBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 }, statusText: { fontSize: 12, fontWeight: '800' }, divider: { height: 1 }, infoRow: { flexDirection: 'row', gap: 12 }, infoItem: { flex: 1, gap: 4 }, infoLabel: { fontSize: 12, fontWeight: '600' }, infoValue: { fontSize: 15, fontWeight: '800' }, actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, actionButton: { flex: 1, minWidth: '23%', borderRadius: 18, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', gap: 6 }, actionText: { fontSize: 12, fontWeight: '700' }, statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, statCard: { width: '48%', borderRadius: 22, borderWidth: 1, padding: 16, gap: 10 }, statIcon: { width: 38, height: 38, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, statLabel: { fontSize: 13, fontWeight: '600' }, statValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 }, section: { borderRadius: 26, borderWidth: 1, padding: 18, gap: 12 }, sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 }, sectionLink: { fontSize: 13, fontWeight: '700' }, sectionMeta: { fontSize: 13, fontWeight: '600' }, summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 }, summaryItem: { width: '50%', gap: 6 }, summaryLabel: { fontSize: 13, fontWeight: '600' }, summaryValue: { fontSize: 22, fontWeight: '800' }, payrollRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, payrollValue: { fontSize: 26, fontWeight: '900' }, summaryText: { fontSize: 15, fontWeight: '800' }, listGap: { gap: 10 }, permissionRow: { borderRadius: 18, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, permissionIcon: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, permissionBody: { flex: 1, gap: 2 }, permissionTitle: { fontSize: 14, fontWeight: '700' }, permissionDescription: { fontSize: 12, lineHeight: 17, fontWeight: '500' }, serviceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 12, borderBottomWidth: 1 }, serviceBody: { flex: 1, gap: 4 }, serviceTitle: { fontSize: 14, fontWeight: '700' }, serviceMeta: { fontSize: 12, fontWeight: '500' }, servicePill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 }, servicePillText: { fontSize: 12, fontWeight: '800' }, emptyText: { fontSize: 14, fontWeight: '600' }, sheetContent: { flex: 1, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 20, gap: 16 }, sheetTitle: { fontSize: 22, fontWeight: '800' }, sheetButtons: { flexDirection: 'row', gap: 12 }, secondaryButton: { flex: 1, height: 52, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, secondaryText: { fontSize: 15, fontWeight: '700' }, primaryButton: { flex: 1.1, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' }, switchTrack: { width: 46, height: 28, borderRadius: 999, paddingHorizontal: 3, justifyContent: 'center' }, switchKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }, switchKnobActive: { alignSelf: 'flex-end' },
+const S = StyleSheet.create({
+    screen: { flex: 1 }, c: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    topBar: { paddingHorizontal: 20, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    tbt: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 }, tbs: { fontSize: 13, fontWeight: '500', marginTop: 2 },
+    ib: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    scroll: { paddingHorizontal: 16, gap: 14 },
+    hero: { borderRadius: 24, borderWidth: 1, padding: 16, gap: 14 },
+    htop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    aw: { position: 'relative' }, av: { width: 72, height: 72, borderRadius: 22 },
+    avf: { width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    avi: { fontSize: 24, fontWeight: '800' },
+    od: { position: 'absolute', right: 2, bottom: 2, width: 14, height: 14, borderRadius: 7, borderWidth: 2.5 },
+    hi: { flex: 1, gap: 4 }, hn: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+    hr2: { fontSize: 13, fontWeight: '600' }, he: { fontSize: 12, fontWeight: '500' },
+    badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 }, badgeT: { fontSize: 11, fontWeight: '800' },
+    div: { height: 1 }, irow: { flexDirection: 'row', gap: 24 },
+    iitem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    ilabel: { fontSize: 11, fontWeight: '600' }, ival: { fontSize: 14, fontWeight: '800' },
+    lsd: { width: 10, height: 10, borderRadius: 5 },
+    ar: { flexDirection: 'row', gap: 8 },
+    ab: { flex: 1, paddingVertical: 10, borderRadius: 14, borderWidth: 1, alignItems: 'center', gap: 5 },
+    abl: { fontSize: 11, fontWeight: '700' },
+    tabs: { flexDirection: 'row', borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+    ti: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+    tt: { fontSize: 13, fontWeight: '600' }, tta: { fontWeight: '800' },
+    sg: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    sb: { width: '47%', borderRadius: 14, borderWidth: 1, padding: 10, gap: 4 },
+    si: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    sl: { fontSize: 11, fontWeight: '600' }, sv: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+    card: { borderRadius: 22, borderWidth: 1, padding: 16, gap: 10 },
+    shr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    st: { fontSize: 17, fontWeight: '800' }, slink: { fontSize: 13, fontWeight: '700' },
+    empty: { fontSize: 14, fontWeight: '600', paddingVertical: 8 },
+    svr: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
+    sdi: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    svb: { flex: 1, gap: 3 }, svt: { fontSize: 13, fontWeight: '700' }, svm: { fontSize: 11, fontWeight: '500' },
+    pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 }, pillT: { fontSize: 11, fontWeight: '800' },
+    tc: { flexDirection: 'row', gap: 10 },
+    tcard: { flex: 1, borderRadius: 18, borderWidth: 1, padding: 14, gap: 10 },
+    cpw: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    cp: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 8, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
+    cpt: { fontSize: 10, fontWeight: '700', maxWidth: 60 },
+    prows: { gap: 8 }, prow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    plabel: { fontSize: 13, fontWeight: '600' }, pval: { fontSize: 13, fontWeight: '800' },
+    pdiv: { height: 1, marginVertical: 2 }, pnl: { fontSize: 14, fontWeight: '700' }, pn: { fontSize: 16, fontWeight: '900' },
+    pdb: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }, pdt: { fontSize: 12, fontWeight: '700', flex: 1 },
+    lr: { flexDirection: 'row', gap: 14 }, li: { flex: 1, alignItems: 'center', gap: 6 },
+    lib: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    ll: { fontSize: 11, fontWeight: '600', textAlign: 'center' }, lv: { fontSize: 18, fontWeight: '800' },
+    plist: { gap: 8 },
+    pr: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+    pi: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    pl: { flex: 1, fontSize: 13, fontWeight: '700' },
+    plr: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
+    pli: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    plb: { flex: 1, gap: 2 }, plm: { fontSize: 14, fontWeight: '700' }, pls: { fontSize: 11, fontWeight: '500' }, pla: { fontSize: 14, fontWeight: '800' },
+    bbtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
+    pbtn: { flex: 1, height: 52, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    pbtnT: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    sbtn: { flex: 1, height: 52, borderRadius: 18, borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    sbtnT: { fontSize: 15, fontWeight: '800' },
+    swt: { width: 42, height: 26, borderRadius: 999, paddingHorizontal: 3, justifyContent: 'center' },
+    swk: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' }, swko: { alignSelf: 'flex-end' },
+    shc: { flex: 1, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, gap: 14 },
+    shtr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    shtt: { fontSize: 20, fontWeight: '800' },
+    shbs: { flexDirection: 'row', gap: 12 },
+    cbtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    cbtnT: { fontSize: 15, fontWeight: '700' },
+    savbtn: { flex: 1.1, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    savbtnT: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

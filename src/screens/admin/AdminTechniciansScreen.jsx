@@ -29,7 +29,32 @@ import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/co
 import Header from '@/components/Header';
 import WrapperContainer, { NO_BOTTOM_EDGES } from '@/components/WrapperContainer';
 import AppBottomSheet from '@/components/AppBottomSheet';
-import BottomSheet from '@gorhom/bottom-sheet';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+
+const PURPLE = '#8B5CF6';
+
+const PERMS = [
+    { key: 'can_manage_services', label: 'Servis Yönetimi', icon: 'clipboard-text-outline', color: serviceBlue },
+    { key: 'can_manage_customers', label: 'Müşteri Yönetimi', icon: 'account-group-outline', color: '#06B6D4' },
+    { key: 'can_manage_inventory', label: 'Ürün Yönetimi', icon: 'package-variant-closed', color: PURPLE },
+    { key: 'can_manage_users', label: 'Kullanıcı Yönetimi', icon: 'account-cog-outline', color: '#EC4899' },
+    { key: 'can_manage_accounting', label: 'Muhasebe', icon: 'calculator-variant-outline', color: serviceOrange },
+    { key: 'can_manage_notifications', label: 'Bildirimler', icon: 'bell-outline', color: '#0EA5E9' },
+    { key: 'can_manage_hr', label: 'Maaş/Bordro İşlemleri', icon: 'briefcase-account-outline', color: '#14B8A6' },
+    { key: 'can_manage_reports', label: 'Raporlama', icon: 'chart-box-outline', color: '#7C3AED' },
+    { key: 'can_manage_settings', label: 'Ayarlar', icon: 'cog-outline', color: '#64748B' },
+    { key: 'can_manage_technicians', label: 'Teknisyen Yönetimi', icon: 'shield-account-outline', color: '#F43F5E' },
+];
+
+function PER({ item, value, onToggle, colors }) {
+    return (
+        <Pressable onPress={() => onToggle(item.key)} style={[styles.permRow, { backgroundColor: value ? item.color + '12' : colors.surface, borderColor: value ? item.color + '30' : colors.border }]}>
+            <View style={[styles.permIcon, { backgroundColor: value ? item.color : colors.textTertiary }]}><MaterialCommunityIcons name={item.icon} size={13} color='#fff' /></View>
+            <Text style={[styles.permLabel, { color: value ? colors.text : colors.textSecondary, flex: 1 }]}>{item.label}</Text>
+            <View style={[styles.switchTrack, { backgroundColor: value ? item.color : colors.border }]}><View style={[styles.switchKnob, value && styles.switchKnobOn]} /></View>
+        </Pressable>
+    );
+}
 
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
 
@@ -298,6 +323,12 @@ export default function AdminTechniciansScreen() {
         visible: false, icon: '', iconColor: serviceRed,
         title: '', description: '', primaryLabel: '', onConfirm: null,
     });
+
+    // Yetki modal state'leri
+    const [pSheet, setPSheet] = useState(false);
+    const [draft, setDraft] = useState({});
+    const [selectedTech, setSelectedTech] = useState(null);
+    const [saving, setSaving] = useState(false);
     const closeModal = useCallback(() => setConfirmModal(p => ({ ...p, visible: false })), []);
     const pendingConfirmActionRef = useRef(null);
 
@@ -411,15 +442,18 @@ export default function AdminTechniciansScreen() {
 
     const handleNavigate = useCallback((action, tech) => {
         if (action === 'view' || action === 'detail') {
-            navigation.navigate('AdminTechnicianDetail', { technicianId: tech.id });
+            navigation.navigate('TechnicianDetail', { technicianId: tech.id, technician: tech });
+        } else if (action === 'permissions') {
+            setSelectedTech(tech);
+            setDraft({ ...(tech?.permissions || {}) });
+            setPSheet(true);
         } else if (action === 'edit') {
-            navigation.navigate('AdminEditUser', {
-                user: tech?.user,
-                onSuccess: (updatedUser) => {
+            navigation.navigate('AdminEditTechnician', {
+                technicianId: tech.id,
+                technician: tech,
+                onSuccess: (updatedTech) => {
                     setTechnicians(prev => prev.map(t =>
-                        t.user?.id === updatedUser.id
-                            ? { ...t, user: { ...t.user, ...updatedUser } }
-                            : t
+                        t.id === updatedTech.id ? { ...t, ...updatedTech } : t
                     ));
                 },
             });
@@ -433,6 +467,28 @@ export default function AdminTechniciansScreen() {
             console.log('navigate:', action, tech?.id);
         }
     }, [navigation]);
+
+    const saveP = async () => {
+        if (!selectedTech?.id) return;
+        setSaving(true);
+        try {
+            const r = await api.patch(ENDPOINTS.TECHNICIAN.PERMISSIONS(selectedTech.id), draft);
+            const updated = r?.data?.permissions || r?.data || draft;
+            setTechnicians(prev => prev.map(t =>
+                t.id === selectedTech.id
+                    ? { ...t, permissions: { ...(t.permissions || {}), ...updated } }
+                    : t
+            ));
+            setPSheet(false);
+            showToast('success', 'Başarılı', 'Yetkiler güncellendi.');
+        } catch (e) {
+            showToast('error', 'Hata', e?.response?.data?.detail || 'Hata.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const togP = (k) => setDraft((d) => ({ ...d, [k]: !d[k] }));
 
     const handleWhatsApp = useCallback((tech) => {
         const phone = String(tech?.user?.phone_number || '').replace(/[^\d+]/g, '');
@@ -678,6 +734,16 @@ export default function AdminTechniciansScreen() {
                     </Pressable>
                 </View>
             </AppBottomSheet>
+            {/* Yetki Düzenleme Modal (Doğrudan bu sayfa üzerinde) */}
+            <AppBottomSheet visible={pSheet} onClose={() => setPSheet(false)} snapPoints={['90%']} wrapContent={false}>
+                <View style={[styles.shc, { flex: 1, paddingHorizontal: 20, paddingTop: 8 }]}>
+                    <View style={styles.shtr}><Text style={[styles.shtt, { color: colors.text }]}>Yetki Düzenle</Text><Pressable onPress={() => setPSheet(false)}><MaterialCommunityIcons name='close' size={20} color={colors.textSecondary} /></Pressable></View>
+                    <BottomSheetScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.plist, { paddingBottom: 16 }]}>
+                        {PERMS.map((o) => <PER key={o.key} item={o} value={Boolean(draft[o.key])} onToggle={togP} colors={colors} />)}
+                        <View style={[styles.shbs, { marginTop: 8, paddingBottom: 22 }]}><Pressable onPress={() => setPSheet(false)} style={[styles.cbtn, { borderColor: colors.border }]}><Text style={[styles.cbtnT, { color: colors.textSecondary }]}>Vazgeç</Text></Pressable><Pressable onPress={saveP} disabled={saving} style={[styles.savbtn, { backgroundColor: serviceBlue, opacity: saving ? 0.7 : 1 }]}>{saving ? <ActivityIndicator size='small' color='#fff' /> : <Text style={styles.savbtnT}>Kaydet</Text>}</Pressable></View>
+                    </BottomSheetScrollView>
+                </View>
+            </AppBottomSheet>
         </>
     );
 }
@@ -752,4 +818,21 @@ const styles = StyleSheet.create({
     centeredDesc: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 16 },
     centeredBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, alignSelf: 'stretch', alignItems: 'center' },
     centeredBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+    // Yetki modal ek stilleri
+    permRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
+    permIcon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    permLabel: { fontSize: 13, fontWeight: '700' },
+    switchTrack: { width: 42, height: 26, borderRadius: 999, paddingHorizontal: 3, justifyContent: 'center' },
+    switchKnob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
+    switchKnobOn: { alignSelf: 'flex-end' },
+    shc: { flex: 1, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, gap: 14 },
+    shtr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    shtt: { fontSize: 20, fontWeight: '800' },
+    shbs: { flexDirection: 'row', gap: 12 },
+    cbtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    cbtnT: { fontSize: 15, fontWeight: '700' },
+    savbtn: { flex: 1.1, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    savbtnT: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    plist: { gap: 8 },
 });
