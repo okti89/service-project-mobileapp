@@ -4,7 +4,7 @@ const ENDPOINTS = {
         LOGOUT: 'accounts/auth/logout/',
         REGISTER: 'accounts/auth/register/',
         CHECK_AUTH: 'accounts/auth/check/',
-        ME: 'accounts/auth/check/',
+        ME: 'accounts/auth/me/',
         CHANGE_PASSWORD: 'accounts/auth/change-password/',
         PASSWORD_RESET_REQUEST: 'accounts/auth/password/reset/request/',
         PASSWORD_RESET_VERIFY: 'accounts/auth/password/reset/verify/',

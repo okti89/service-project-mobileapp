@@ -23,12 +23,43 @@ import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
 
-const FILTERS = [
-    { key: 'all', label: 'Tümü' },
-    { key: 'unread', label: 'Okunmamış' },
-    { key: 'service', label: 'Servis' },
-    { key: 'accounting', label: 'Muhasebe' },
-];
+const PAGE_SIZE = 50;
+
+const mergeNotifications = (currentItems, nextItems, replace = false) => {
+    const source = replace ? nextItems : [...currentItems, ...nextItems];
+    const seen = new Set();
+
+    return source.filter((item) => {
+        const key = String(item?.id ?? '');
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
+
+const parseNotificationResponse = (payload) => {
+    if (Array.isArray(payload)) {
+        return {
+            items: payload,
+            nextPage: null,
+            totalCount: payload.length,
+        };
+    }
+
+    const items = Array.isArray(payload?.results) ? payload.results : [];
+    let nextPage = null;
+
+    if (payload?.next) {
+        const match = String(payload.next).match(/[?&]page=(\d+)/);
+        nextPage = match ? Number(match[1]) : null;
+    }
+
+    return {
+        items,
+        nextPage,
+        totalCount: Number(payload?.count || items.length || 0),
+    };
+};
 
 const getNotificationMeta = (item) => {
     const title = String(item?.title || '').toLocaleLowerCase('tr-TR');
@@ -65,16 +96,16 @@ const getNotificationMeta = (item) => {
 
     if (
         blob.includes('servis')
-        || blob.includes('gorev')
+        || blob.includes('görev')
         || blob.includes('gecikme')
-        || blob.includes('hatirlatma')
-        || blob.includes('uyari')
+        || blob.includes('hatırlatma')
+        || blob.includes('uyarı')
         || relatedScreen.includes('service')
     ) {
         return {
             category: 'service',
-            icon: blob.includes('geçikme') ? 'clock-outline' : 'wrench-outline',
-            color: blob.includes('geçikme') ? serviceOrange : serviceBlue,
+            icon: blob.includes('gecikme') ? 'clock-outline' : 'wrench-outline',
+            color: blob.includes('gecikme') ? serviceOrange : serviceBlue,
             actionLabel: item?.related_id ? 'Servisi Aç' : null,
         };
     }
@@ -96,8 +127,8 @@ const formatClock = (value) => {
 const formatGroupLabel = (dateValue) => {
     const date = dayjs(dateValue);
     if (!date.isValid()) return 'Daha Eski';
-    if (date.isSame(dayjs(), 'day')) return 'Bugun';
-    if (date.isSame(dayjs().subtract(1, 'day'), 'day')) return 'Dun';
+    if (date.isSame(dayjs(), 'day')) return 'Bugün';
+    if (date.isSame(dayjs().subtract(1, 'day'), 'day')) return 'Dün';
     return date.format('DD MMMM');
 };
 
@@ -112,28 +143,6 @@ const openServiceDetail = (navigation, item) => {
         return false;
     }
 };
-
-function FilterTab({ item, active, count, colors, onPress }) {
-    return (
-        <Pressable
-            onPress={onPress}
-            style={[
-                styles.filterTab,
-                {
-                    backgroundColor: active ? colors.primary : colors.surface,
-                    borderColor: active ? colors.primary : colors.border,
-                },
-            ]}
-        >
-            <Text style={[styles.filterText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>{item.label}</Text>
-            {typeof count === 'number' ? (
-                <View style={[styles.filterBadge, { backgroundColor: active ? 'rgba(255,255,255,0.22)' : `${colors.primary}14` }]}>
-                    <Text style={[styles.filterBadgeText, { color: active ? '#FFFFFF' : colors.primary }]}>{count}</Text>
-                </View>
-            ) : null}
-        </Pressable>
-    );
-}
 
 function SectionHeader({ label, colors }) {
     return (
@@ -192,6 +201,36 @@ function NotificationCard({ item, colors, onPress, onLongPress, onActionPress })
     );
 }
 
+function ListFooter({ loadingMore, hasMore, colors, onLoadMore }) {
+    if (loadingMore) {
+        return (
+            <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+        );
+    }
+
+    if (!hasMore) {
+        return <View style={styles.footerSpacer} />;
+    }
+
+    return (
+        <Pressable
+            onPress={onLoadMore}
+            style={({ pressed }) => [
+                styles.moreButton,
+                {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.9 : 1,
+                },
+            ]}
+        >
+            <Text style={[styles.moreButtonText, { color: colors.primary }]}>Daha Fazla</Text>
+        </Pressable>
+    );
+}
+
 export default function NotificationsScreen() {
     const { colors } = useTheme();
     const navigation = useNavigation();
@@ -200,24 +239,39 @@ export default function NotificationsScreen() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [activeFilter, setActiveFilter] = useState('all');
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [nextPage, setNextPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
 
-    const loadNotifications = useCallback(async () => {
+    const loadNotifications = useCallback(async ({ page = 1, replace = false } = {}) => {
         try {
-            const response = await api.get(ENDPOINTS.NOTIFICATIONS.LIST);
-            const rows = Array.isArray(response?.data) ? response.data : [];
-            rows.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-            setNotifications(rows);
+            const response = await api.get(ENDPOINTS.NOTIFICATIONS.LIST, {
+                params: {
+                    page,
+                    page_size: PAGE_SIZE,
+                },
+            });
+
+            const parsed = parseNotificationResponse(response?.data);
+            const orderedItems = [...parsed.items].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+            setNotifications((prev) => mergeNotifications(prev, orderedItems, replace));
+            setNextPage(parsed.nextPage);
+            setTotalCount(parsed.totalCount);
         } catch (error) {
             console.log('Notifications load error:', error?.response?.data || error?.message || error);
-            setNotifications([]);
+            if (replace) {
+                setNotifications([]);
+                setNextPage(null);
+                setTotalCount(0);
+            }
         }
     }, []);
 
     useEffect(() => {
         const run = async () => {
             setLoading(true);
-            await loadNotifications();
+            await loadNotifications({ page: 1, replace: true });
             setLoading(false);
         };
         run();
@@ -225,18 +279,35 @@ export default function NotificationsScreen() {
 
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
-        await Promise.all([loadNotifications(), updateUnreadCount?.()]);
+        await Promise.all([
+            loadNotifications({ page: 1, replace: true }),
+            updateUnreadCount?.(),
+        ]);
         setRefreshing(false);
     }, [loadNotifications, updateUnreadCount]);
 
+    const handleLoadMore = useCallback(async () => {
+        if (!nextPage || loading || refreshing || loadingMore) return;
+        setLoadingMore(true);
+        await loadNotifications({ page: nextPage, replace: false });
+        setLoadingMore(false);
+    }, [loadNotifications, loading, loadingMore, nextPage, refreshing]);
+
     const markAsRead = useCallback(async (item) => {
         if (item.is_read) return;
+
+        setNotifications((prev) => prev.map((entry) => (
+            entry.id === item.id ? { ...entry, is_read: true } : entry
+        )));
+
         try {
             await api.patch(ENDPOINTS.NOTIFICATIONS.DETAIL(item.id));
-            setNotifications((prev) => prev.map((entry) => (entry.id === item.id ? { ...entry, is_read: true } : entry)));
             await updateUnreadCount?.();
         } catch (error) {
             console.log('Notification mark read error:', error?.response?.data || error?.message || error);
+            setNotifications((prev) => prev.map((entry) => (
+                entry.id === item.id ? { ...entry, is_read: item.is_read } : entry
+            )));
         }
     }, [updateUnreadCount]);
 
@@ -244,6 +315,7 @@ export default function NotificationsScreen() {
         try {
             await api.delete(ENDPOINTS.NOTIFICATIONS.DETAIL(item.id));
             setNotifications((prev) => prev.filter((entry) => entry.id !== item.id));
+            setTotalCount((prev) => Math.max(0, prev - 1));
             if (!item.is_read) {
                 await updateUnreadCount?.();
             }
@@ -272,42 +344,24 @@ export default function NotificationsScreen() {
     const markAllAsRead = useCallback(async () => {
         const unreadItems = notifications.filter((entry) => !entry.is_read);
         if (!unreadItems.length) return;
+
+        setNotifications((prev) => prev.map((entry) => ({ ...entry, is_read: true })));
+
         try {
             await Promise.all(unreadItems.map((entry) => api.patch(ENDPOINTS.NOTIFICATIONS.DETAIL(entry.id)).catch(() => null)));
-            setNotifications((prev) => prev.map((entry) => ({ ...entry, is_read: true })));
             await updateUnreadCount?.();
         } catch (error) {
             console.log('Notification mark all error:', error?.response?.data || error?.message || error);
         }
     }, [notifications, updateUnreadCount]);
 
-    const counts = useMemo(() => {
-        const unread = notifications.filter((item) => !item.is_read).length;
-        const service = notifications.filter((item) => getNotificationMeta(item).category === 'service').length;
-        const accounting = notifications.filter((item) => getNotificationMeta(item).category === 'accounting').length;
-        return {
-            all: notifications.length,
-            unread,
-            service,
-            accounting,
-        };
-    }, [notifications]);
-
-    const filteredNotifications = useMemo(() => {
-        return notifications.filter((item) => {
-            const meta = getNotificationMeta(item);
-            if (activeFilter === 'unread') return !item.is_read;
-            if (activeFilter === 'service') return meta.category === 'service';
-            if (activeFilter === 'accounting') return meta.category === 'accounting';
-            return true;
-        });
-    }, [activeFilter, notifications]);
+    const unreadCount = useMemo(() => notifications.filter((item) => !item.is_read).length, [notifications]);
 
     const listItems = useMemo(() => {
         const result = [];
         let currentGroup = '';
 
-        filteredNotifications.forEach((item) => {
+        notifications.forEach((item) => {
             const label = formatGroupLabel(item.created_at);
             if (label !== currentGroup) {
                 currentGroup = label;
@@ -317,28 +371,19 @@ export default function NotificationsScreen() {
         });
 
         return result;
-    }, [filteredNotifications]);
+    }, [notifications]);
 
     const renderHeader = () => (
         <View style={styles.topArea}>
-            {counts.unread > 0 ? (
+            {unreadCount > 0 ? (
                 <Pressable onPress={markAllAsRead} style={styles.markAllWrap}>
-                    <Text style={[styles.markAllText, { color: colors.primary }]}>Tümünü Okundu İşaretle</Text>
+                    <Text style={[styles.markAllText, { color: colors.primary }]}>Tümünü Okundu işaretle</Text>
                 </Pressable>
             ) : null}
 
-            <View style={[styles.filterRail, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                {FILTERS.map((filter) => (
-                    <FilterTab
-                        key={filter.key}
-                        item={filter}
-                        active={activeFilter === filter.key}
-                        count={counts[filter.key]}
-                        colors={colors}
-                        onPress={() => setActiveFilter(filter.key)}
-                    />
-                ))}
-            </View>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+                {`${notifications.length}${totalCount ? ` / ${totalCount}` : ''} bildirim`}
+            </Text>
         </View>
     );
 
@@ -358,6 +403,7 @@ export default function NotificationsScreen() {
                         ? <SectionHeader label={item.label} colors={colors} />
                         : <NotificationCard item={item.item} colors={colors} onPress={handlePress} onLongPress={handleLongPress} onActionPress={handleActionPress} />}
                     ListHeaderComponent={renderHeader}
+                    ListFooterComponent={<ListFooter loadingMore={loadingMore} hasMore={Boolean(nextPage)} colors={colors} onLoadMore={handleLoadMore} />}
                     ListEmptyComponent={
                         <View style={styles.centerState}>
                             <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceMuted }]}>
@@ -396,39 +442,8 @@ const styles = StyleSheet.create({
         ...typography.caption,
         fontWeight: '700',
     },
-    filterRail: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        borderRadius: 18,
-        borderWidth: 1,
-        padding: 4,
-        gap: 4,
-    },
-    filterTab: {
-        minHeight: 36,
-        borderRadius: 12,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-    },
-    filterText: {
+    summaryText: {
         ...typography.caption,
-        fontWeight: '700',
-    },
-    filterBadge: {
-        minWidth: 20,
-        height: 20,
-        borderRadius: 10,
-        paddingHorizontal: 5,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    filterBadgeText: {
-        fontSize: 10,
-        fontWeight: '800',
     },
     sectionRow: {
         paddingTop: spacing.m,
@@ -536,5 +551,26 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         maxWidth: 280,
         lineHeight: 22,
+    },
+    footerLoader: {
+        paddingVertical: spacing.m,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    footerSpacer: {
+        height: spacing.l,
+    },
+    moreButton: {
+        minHeight: 46,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: spacing.s,
+        marginBottom: spacing.m,
+    },
+    moreButtonText: {
+        ...typography.bodySmall,
+        fontWeight: '700',
     },
 });
