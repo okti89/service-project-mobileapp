@@ -686,17 +686,6 @@ export default function HomeScreen({ navigation }) {
                         })
                     )}
 
-                    {/* 6. BOTTOM CALENDAR BUTTON */}
-                    <Pressable
-                        style={[styles.calendarButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                        onPress={() => navigation.navigate('AdminPanel', { screen: 'AdminServices' })}
-                    >
-                        <MaterialCommunityIcons name="calendar-month-outline" size={20} color="#0066CC" style={{ marginRight: sp(8) }} />
-                        <Text style={[styles.calendarButtonText, { color: '#0066CC' }]}>
-                            Takvimi Görüntüle
-                        </Text>
-                        <MaterialCommunityIcons name="chevron-right" size={20} color="#0066CC" style={{ marginLeft: 'auto' }} />
-                    </Pressable>
                 </ScrollView>
 
                 <CalendarPickerSheet

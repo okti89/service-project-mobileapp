@@ -165,13 +165,6 @@ const MENU_ITEMS_BY_KEY = ADMIN_MENU_ITEMS.reduce((acc, item) => {
     return acc;
 }, {});
 
-// ─── Hızlı İşlemler ────────────────────────────────────────────────────────────
-const QUICK_ACTIONS = [
-    { key: 'new-user', icon: 'account-plus-outline', label: 'Yeni Kullanıcı', route: 'AdminUsers', color: serviceBlue },
-    { key: 'new-service', icon: 'clipboard-plus-outline', label: 'Yeni Servis', route: 'AdminServices', color: serviceGreen },
-    { key: 'new-product', icon: 'package-variant-plus', label: 'Yeni Ürün', route: 'AdminInventory', color: '#7C3AED' },
-    { key: 'reports', icon: 'chart-bar', label: 'Rapor Oluştur', route: 'AdminReports', color: serviceOrange },
-];
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 function QuickAction({ icon, label, color, badge, onPress, colors }) {
@@ -326,23 +319,7 @@ export default function AdminPanelScreen({ navigation }) {
                     <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textTertiary} />
                 </Pressable>
 
-                {/* ─── Hızlı İşlemler ─── */}
-                <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Hızlı İşlemler</Text>
-                </View>
 
-                <View style={[styles.quickActionsGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {QUICK_ACTIONS.map((action, index) => (
-                        <QuickAction
-                            key={action.key}
-                            icon={action.icon}
-                            label={action.label}
-                            color={action.color}
-                            onPress={() => navigation.navigate(action.route)}
-                            colors={colors}
-                        />
-                    ))}
-                </View>
 
                 {/* ─── Yönetim Modülleri ─── */}
                 <View style={[styles.sectionHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }]}>

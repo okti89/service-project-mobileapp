@@ -1554,7 +1554,7 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
                 onShow={() => setModalHazir(true)}
                 onRequestClose={modalKapat}
             >
-                <SafeAreaView style={[styles.modalSafe, { backgroundColor: isDark ? colors.surface : '#fff' }]}>
+                <View style={[styles.modalSafe, { backgroundColor: isDark ? colors.surface : '#fff' }]}>
                     <Text style={[styles.modalBaslik, { color: colors.text }]}>
                         {aktifImzalayan === "teknisyen" ? "Teknisyen İmzası" : "Müşteri İmzası"}
                     </Text>
@@ -1589,7 +1589,7 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
                             {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.imzaBtnText, { color: '#fff' }]}>Onayla</Text>}
                         </Pressable>
                     </View>
-                </SafeAreaView>
+                </View>
             </Modal>
         </View>
     );
