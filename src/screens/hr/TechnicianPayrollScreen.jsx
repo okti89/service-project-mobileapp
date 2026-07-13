@@ -66,28 +66,7 @@ const getInitials = (fullName) => {
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
-const sumByName = (components, matcher) => {
-    if (!Array.isArray(components)) return 0;
-    return components.reduce((sum, item) => {
-        if (!matcher(String(item?.name || ''))) return sum;
-        const amount = Number(item?.amount || 0);
-        return sum + (Number.isFinite(amount) ? amount : 0);
-    }, 0);
-};
 
-const getOvertimeAmount = (payroll) => {
-    const direct = [payroll?.overtime_amount, payroll?.overtime_pay, payroll?.mesai_amount, payroll?.mesai_pay, payroll?.total_overtime];
-    for (const value of direct) {
-        const amount = Number(value);
-        if (Number.isFinite(amount) && amount > 0) return amount;
-    }
-    return sumByName(payroll?.components, (name) => /mesai|fazla/i.test(name));
-};
-
-const getBonusAmount = (payroll) => {
-    const totalPremiums = Number(payroll?.total_premiums || 0);
-    return Math.max(0, totalPremiums - getOvertimeAmount(payroll));
-};
 
 export default function TechnicianPayrollScreen({ navigation }) {
     const insets = useSafeAreaInsets();
@@ -100,7 +79,6 @@ export default function TechnicianPayrollScreen({ navigation }) {
     const [refreshing, setRefreshing] = useState(false);
     const [sharingId, setSharingId] = useState(null);
     const [payrolls, setPayrolls] = useState([]);
-    const [showAll, setShowAll] = useState(false);
     const selfTechnicianId = userInfo?.technician_profile_id || null;
     const useAdminSelfPayroll = Boolean(isAdmin && selfTechnicianId);
     const [currentMonth, setCurrentMonth] = useState(() => {
@@ -193,19 +171,17 @@ export default function TechnicianPayrollScreen({ navigation }) {
 
     const metrics = useMemo(() => {
         if (!activePayroll) {
-            return { base: 0, overtime: 0, bonus: 0, deductions: 0, net: 0 };
+            return { base: 0, bonus: 0, deductions: 0, net: 0 };
         }
 
         return {
             base: Number(activePayroll.base_salary || 0),
-            overtime: getOvertimeAmount(activePayroll),
-            bonus: getBonusAmount(activePayroll),
+            bonus: Number(activePayroll.total_premiums || 0),
             deductions: Number(activePayroll.total_deductions || 0),
             net: Number(activePayroll.net_salary || 0),
         };
     }, [activePayroll]);
 
-    const visiblePayrolls = useMemo(() => (showAll ? payrolls : payrolls.slice(0, 4)), [payrolls, showAll]);
 
     const shiftMonth = (direction) => {
         setCurrentMonth((prev) => {
@@ -303,20 +279,26 @@ export default function TechnicianPayrollScreen({ navigation }) {
                                             <ActivityIndicator size="small" color={serviceBlue} />
                                         ) : (
                                             <>
-                                                <MaterialCommunityIcons name="download" size={18} color={serviceBlue} />
-                                                <Text style={[styles.downloadText, { color: serviceBlue }]}>PDF İndir</Text>
+                                                <MaterialCommunityIcons name="eye-outline" size={18} color={serviceBlue} />
+                                                <Text style={[styles.downloadText, { color: serviceBlue }]}>PDF Görüntüle</Text>
                                             </>
                                         )}
                                     </Pressable>
                                 </View>
 
-                                <View style={styles.inlineStats}> 
-                                    <View style={styles.inlineStat}><Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Mesai</Text><Text style={[styles.inlineBlue, { color: serviceBlue }]}>₺{fmtMoney(metrics.overtime)}</Text></View>
-                                    <View style={[styles.inlineDivider, { backgroundColor: colors.border }]} />
+                                <View style={styles.inlineStats}>
                                     <View style={styles.inlineStat}><Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Prim / Bonus</Text><Text style={[styles.inlineGreen, { color: serviceGreen }]}>₺{fmtMoney(metrics.bonus)}</Text></View>
                                     <View style={[styles.inlineDivider, { backgroundColor: colors.border }]} />
                                     <View style={styles.inlineStat}><Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Kesintiler</Text><Text style={[styles.inlineRed, { color: serviceRed }]}>₺{fmtMoney(metrics.deductions)}</Text></View>
                                 </View>
+                                <Pressable
+                                    onPress={() => navigation.navigate('TechnicianPayrollDetail', { payrollId: activePayroll.id, onRefresh: fetchPayrolls })}
+                                    style={({ pressed }) => [styles.detailButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.76 : 1 }]}
+                                >
+                                    <MaterialCommunityIcons name="file-document-outline" size={18} color={serviceBlue} />
+                                    <Text style={[styles.detailButtonText, { color: serviceBlue }]}>Bordro Detayını Görüntüle</Text>
+                                    <MaterialCommunityIcons name="chevron-right" size={18} color={serviceBlue} />
+                                </Pressable>
                             </>
                         ) : (
                             <View style={styles.emptyCurrent}> 
@@ -330,63 +312,19 @@ export default function TechnicianPayrollScreen({ navigation }) {
                         <View style={styles.metricGrid}> 
                             {[
                                 { key: 'Temel Maaş', icon: 'wallet-outline', color: serviceBlue, bg: '#EFF6FF', value: metrics.base },
-                                { key: 'Mesai', icon: 'clock-time-four-outline', color: serviceGreen, bg: '#F0FDF4', value: metrics.overtime },
                                 { key: 'Prim / Bonus', icon: 'star-outline', color: '#F59E0B', bg: '#FFF7ED', value: metrics.bonus },
                                 { key: 'Kesinti', icon: 'arrow-down-circle-outline', color: serviceRed, bg: '#FEF2F2', value: metrics.deductions },
                                 { key: 'Net Ödeme', icon: 'file-document-outline', color: '#8B5CF6', bg: '#F5F3FF', value: metrics.net },
                             ].map((item) => (
-                                <View key={item.key} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                                    <View style={[styles.metricIcon, { backgroundColor: item.bg }]}><MaterialCommunityIcons name={item.icon} size={20} color={item.color} /></View>
-                                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{item.key}</Text>
-                                    <Text style={[styles.metricValue, { color: colors.text }]}>₺{fmtMoney(item.value)}</Text>
+                                <View key={item.key} style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                                    <View style={[styles.metricIcon, { backgroundColor: item.bg }]}><MaterialCommunityIcons name={item.icon} size={16} color={item.color} /></View>
+                                    <View style={styles.metricCopy}>
+                                        <Text style={[styles.metricLabel, { color: colors.textSecondary }]} numberOfLines={1}>{item.key}</Text>
+                                        <Text style={[styles.metricValue, { color: colors.text }]} numberOfLines={1}>₺{fmtMoney(item.value)}</Text>
+                                    </View>
                                 </View>
                             ))}
                         </View>
-                    ) : null}
-
-                    <View style={styles.sectionHeader}> 
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>Son Bordrolar</Text>
-                        {payrolls.length > 4 ? (
-                            <Pressable onPress={() => setShowAll((prev) => !prev)}>
-                                <Text style={[styles.sectionLink, { color: serviceBlue }]}>{showAll ? 'Daralt' : 'Tümü'}</Text>
-                            </Pressable>
-                        ) : null}
-                    </View>
-
-                    <View style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                        {visiblePayrolls.length > 0 ? (
-                            visiblePayrolls.map((item, index) => (
-                                <View key={String(item.id)}>
-                                    <Pressable onPress={() => navigation.navigate('TechnicianPayrollDetail', { payrollId: item.id, onRefresh: fetchPayrolls })} style={({ pressed }) => [styles.row, { opacity: pressed ? 0.78 : 1 }]}> 
-                                        <View style={[styles.rowIcon, { backgroundColor: `${serviceBlue}10` }]}><MaterialCommunityIcons name="calendar-month-outline" size={22} color={serviceBlue} /></View>
-                                        <View style={styles.rowCopy}> 
-                                            <Text style={[styles.rowTitle, { color: colors.text }]}>{getMonthLabel(item.period_start)}</Text>
-                                            <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]}>{getPeriodLabel(item.period_start, item.period_end)}</Text>
-                                        </View>
-                                        <Text style={[styles.rowAmount, { color: serviceGreen }]}>₺{fmtMoney(item.net_salary)}</Text>
-                                        <Pressable onPress={() => handlePdf(item)} disabled={sharingId === item.id} style={({ pressed }) => [styles.pdfButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, opacity: pressed || sharingId === item.id ? 0.72 : 1 }]}>
-                                            {sharingId === item.id ? <ActivityIndicator size="small" color={serviceBlue} /> : <Text style={[styles.pdfText, { color: serviceBlue }]}>PDF</Text>}
-                                        </Pressable>
-                                        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} />
-                                    </Pressable>
-                                    {index < visiblePayrolls.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border }]} /> : null}
-                                </View>
-                            ))
-                        ) : (
-                            <View style={styles.listEmpty}> 
-                                <MaterialCommunityIcons name="file-document-outline" size={28} color={colors.textTertiary} />
-                                <Text style={[styles.listEmptyTitle, { color: colors.text }]}>Henüz bordro yok</Text>
-                                <Text style={[styles.listEmptyText, { color: colors.textSecondary }]}>Sistemde size ait bordro oluştuğunda burada listelenecek.</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {payrolls.length > 4 ? (
-                        <Pressable onPress={() => setShowAll((prev) => !prev)} style={({ pressed }) => [styles.allButton, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.78 : 1 }]}> 
-                            <MaterialCommunityIcons name="text-box-search-outline" size={20} color={serviceBlue} />
-                            <Text style={[styles.allButtonText, { color: serviceBlue }]}>{showAll ? 'Kısa Listeyi Göster' : 'Tüm Bordroları Görüntüle'}</Text>
-                            <MaterialCommunityIcons name="chevron-right" size={20} color={serviceBlue} />
-                        </Pressable>
                     ) : null}
                 </ScrollView>
             )}
@@ -397,11 +335,11 @@ export default function TechnicianPayrollScreen({ navigation }) {
 const styles = StyleSheet.create({
     loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     content: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
-    heroCard: { borderWidth: 1, borderRadius: 24, padding: 18, gap: 16, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+    heroCard: { borderWidth: 1, borderRadius: 20, padding: 14, gap: 12, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
     heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
     identityRow: { flexDirection: 'row', flex: 1, gap: 12 },
-    avatar: { width: 64, height: 64, borderRadius: 32 },
-    avatarFallback: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+    avatar: { width: 52, height: 52, borderRadius: 26 },
+    avatarFallback: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
     avatarFallbackText: { fontSize: 22, fontWeight: '800' },
     identityCopy: { flex: 1, gap: 4, justifyContent: 'center' },
     name: { fontSize: 17, fontWeight: '800' },
@@ -416,40 +354,24 @@ const styles = StyleSheet.create({
     divider: { height: StyleSheet.hairlineWidth },
     netRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     netLabel: { fontSize: 13, fontWeight: '500' },
-    netValue: { fontSize: 28, fontWeight: '900' },
-    downloadButton: { minWidth: 122, height: 46, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
+    netValue: { fontSize: 24, fontWeight: '900' },
+    downloadButton: { minWidth: 112, height: 42, borderRadius: 14, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
     downloadText: { fontSize: 14, fontWeight: '700' },
     inlineStats: { flexDirection: 'row', alignItems: 'stretch', marginTop: 2 },
     inlineStat: { flex: 1, alignItems: 'center', gap: 6 },
     inlineLabel: { fontSize: 12, fontWeight: '500', textAlign: 'center' },
-    inlineBlue: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
     inlineGreen: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
     inlineRed: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
     inlineDivider: { width: 1, marginHorizontal: 8 },
+    detailButton: { height: 46, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 2 },
+    detailButtonText: { fontSize: 13, fontWeight: '700' },
     emptyCurrent: { gap: 6, paddingVertical: 4 },
     emptyCurrentTitle: { fontSize: 15, fontWeight: '700' },
     emptyCurrentText: { fontSize: 13, lineHeight: 18 },
     metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    metricCard: { width: '31.5%', minHeight: 118, borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 14, gap: 8 },
-    metricIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    metricLabel: { fontSize: 12, fontWeight: '500' },
-    metricValue: { fontSize: 14, fontWeight: '800', marginTop: 'auto' },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-    sectionTitle: { fontSize: 17, fontWeight: '800' },
-    sectionLink: { fontSize: 14, fontWeight: '700' },
-    listCard: { borderWidth: 1, borderRadius: 22, overflow: 'hidden' },
-    row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
-    rowIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    rowCopy: { flex: 1, gap: 3 },
-    rowTitle: { fontSize: 15, fontWeight: '700' },
-    rowSubtitle: { fontSize: 12, fontWeight: '500' },
-    rowAmount: { fontSize: 14, fontWeight: '800', marginRight: 6 },
-    pdfButton: { minWidth: 58, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, marginRight: 2 },
-    pdfText: { fontSize: 13, fontWeight: '700' },
-    rowDivider: { height: StyleSheet.hairlineWidth, marginLeft: 72, marginRight: 16 },
-    listEmpty: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 28, gap: 10 },
-    listEmptyTitle: { fontSize: 15, fontWeight: '700' },
-    listEmptyText: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
-    allButton: { height: 54, borderRadius: 18, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 2 },
-    allButtonText: { fontSize: 15, fontWeight: '700' },
+    metricCard: { width: '48.5%', minHeight: 78, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, gap: 9 },
+    metricIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    metricCopy: { flex: 1, gap: 2 },
+    metricLabel: { fontSize: 11, fontWeight: '600' },
+    metricValue: { fontSize: 13, fontWeight: '800' },
 });

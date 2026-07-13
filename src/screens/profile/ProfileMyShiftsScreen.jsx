@@ -19,7 +19,6 @@ const FILTERS = [
     { key: 'all', label: 'Tümü' },
     { key: 'work', label: 'Mesai' },
     { key: 'leave', label: 'İzin' },
-    { key: 'late', label: 'Gecikme' },
 ];
 const ATTENDANCE_META = {
     leave: { title: 'İzin', badge: 'İzinli', accent: '#8B5CF6', bg: 'rgba(139,92,246,0.12)', icon: 'umbrella-outline' },
@@ -92,11 +91,10 @@ function StatCard({ icon, label, value, accent, colors }) {
 function FilterPills({ value, onChange, colors }) {
     return <View style={[styles.filterPillWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>{FILTERS.map((item) => { const active = value === item.key; return <Pressable key={item.key} onPress={() => onChange(item.key)} style={[styles.filterPill, active && { backgroundColor: `${serviceBlue}10`, borderColor: serviceBlue }]}><Text style={[styles.filterPillText, { color: active ? serviceBlue : colors.textSecondary }]}>{item.label}</Text></Pressable>; })}</View>;
 }
-function HistoryRow({ item, colors }) {
-    return <View style={[styles.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.historyDateCol}><Text style={[styles.historyDay, { color: colors.text }]}>{item.dayLabel}</Text><Text style={[styles.historyMonth, { color: colors.textSecondary }]}>{item.monthLabel}</Text><Text style={[styles.historyYear, { color: colors.textSecondary }]}>{item.yearLabel}</Text></View><View style={[styles.historyDivider, { backgroundColor: colors.border }]} /><View style={styles.historyBody}><View style={styles.historyHeaderRow}><View style={styles.historyTitleWrap}><View style={[styles.historyDot, { backgroundColor: item.accent }]} /><Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text></View><View style={[styles.historyBadge, { backgroundColor: item.badgeBg }]}><MaterialCommunityIcons name={item.icon} size={15} color={item.accent} /><Text style={[styles.historyBadgeText, { color: item.accent }]}>{item.badge}</Text></View></View><Text style={[styles.historyTime, { color: colors.textSecondary }]}>{item.timeLabel}</Text><Text style={[styles.historyDetail, { color: colors.textSecondary }]}>{item.detailLabel}</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} /></View>;
+function HistoryRow({ item, colors, onPress }) {
+    return <Pressable onPress={onPress} style={({ pressed }) => [styles.historyRow, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.76 : 1 }]}><View style={styles.historyDateCol}><Text style={[styles.historyDay, { color: colors.text }]}>{item.dayLabel}</Text><Text style={[styles.historyMonth, { color: colors.textSecondary }]}>{item.monthLabel}</Text><Text style={[styles.historyYear, { color: colors.textSecondary }]}>{item.yearLabel}</Text></View><View style={[styles.historyDivider, { backgroundColor: colors.border }]} /><View style={styles.historyBody}><View style={styles.historyHeaderRow}><View style={styles.historyTitleWrap}><View style={[styles.historyDot, { backgroundColor: item.accent }]} /><Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text></View><View style={[styles.historyBadge, { backgroundColor: item.badgeBg }]}><MaterialCommunityIcons name={item.icon} size={15} color={item.accent} /><Text style={[styles.historyBadgeText, { color: item.accent }]}>{item.badge}</Text></View></View><Text style={[styles.historyTime, { color: colors.textSecondary }]}>{item.timeLabel}</Text><Text style={[styles.historyDetail, { color: colors.textSecondary }]}>{item.detailLabel}</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} /></Pressable>;
 }
-
-export default function ProfileMyShiftsScreen() {
+export default function ProfileMyShiftsScreen({ navigation }) {
     const { colors } = useTheme();
     const { userInfo } = useAuth();
     const { showToast } = useToast();
@@ -149,50 +147,48 @@ export default function ProfileMyShiftsScreen() {
         return ordered[0]?.start_time ? formatTimeValue(ordered[0].start_time) : '08:30';
     }, [shifts]);
     const stats = useMemo(() => {
-        const workedDays = new Set(shifts.map((item) => item?.date || null).filter(Boolean)).size;
+        const workedDays = new Set(shifts.map((item) => item?.date || item?.start_time?.slice(0, 10)).filter(Boolean)).size;
         const totalMinutes = shifts.reduce((sum, item) => sum + getShiftDurationMinutes(item), 0);
-        const overtimeMinutes = shifts.reduce((sum, item) => sum + Math.max(0, getShiftDurationMinutes(item) - 9 * 60), 0);
         const leaveDays = attendance.filter((item) => ['leave', 'sick', 'offday'].includes(item?.status)).length;
-        return { workedDays, totalMinutes, overtimeMinutes, leaveDays };
+        return { workedDays, totalMinutes, shiftCount: shifts.length, leaveDays };
     }, [attendance, shifts]);
 
     const historyItems = useMemo(() => {
-        const workItems = shifts.map((shift) => {
-            const shiftDate = new Date(shift?.date || shift?.start_time || shift?.end_time || Date.now());
-            const duration = getShiftDurationMinutes(shift);
-            const overtimeMinutes = Math.max(0, duration - 9 * 60);
-            const isOvertime = overtimeMinutes > 0;
+        const groups = new Map();
+        const ensureGroup = (value) => {
+            const date = new Date(value || Date.now());
+            const key = Number.isNaN(date.getTime()) ? 'unknown' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            if (!groups.has(key)) groups.set(key, { date, shifts: [], attendance: [] });
+            return groups.get(key);
+        };
+        shifts.forEach((shift) => ensureGroup(shift?.date || shift?.start_time || shift?.end_time).shifts.push(shift));
+        attendance.filter((item) => item?.status && ATTENDANCE_META[item.status]).forEach((item) => ensureGroup(item?.date).attendance.push(item));
+
+        return Array.from(groups.entries()).map(([key, group]) => {
+            const sortedShifts = group.shifts.slice().sort((a, b) => new Date(a?.start_time || 0) - new Date(b?.start_time || 0));
+            const totalMinutes = sortedShifts.reduce((sum, shift) => sum + getShiftDurationMinutes(shift), 0);
+            const firstShift = sortedShifts[0];
+            const lastShift = sortedShifts[sortedShifts.length - 1];
+            const attendanceMeta = group.attendance.length ? (ATTENDANCE_META[group.attendance[0]?.status] || ATTENDANCE_META.leave) : null;
+            const hasOpenShift = sortedShifts.some((shift) => shift?.start_time && !shift?.end_time);
+            const isWorkDay = sortedShifts.length > 0;
             return {
-                id: `shift-${shift.id}`,
-                category: 'work',
-                sortDate: shiftDate,
-                dayLabel: String(shiftDate.getDate()).padStart(2, '0'),
-                monthLabel: MONTHS_TR[shiftDate.getMonth()].slice(0, 3),
-                yearLabel: String(shiftDate.getFullYear()),
-                title: isOvertime ? 'Fazla Mesai' : 'Normal Mesai',
-                timeLabel: `${formatTimeValue(shift.start_time)} - ${formatTimeValue(shift.end_time)}`,
-                detailLabel: isOvertime ? `${formatShortDuration(overtimeMinutes)} fazla mesai` : `Toplam ${formatShortDuration(duration)}`,
-                badge: isOvertime ? 'Fazla Mesai' : 'Tamamlandı',
-                accent: isOvertime ? serviceOrange : serviceGreen,
-                badgeBg: isOvertime ? 'rgba(249,115,22,0.12)' : 'rgba(34,197,94,0.12)',
-                icon: isOvertime ? 'timer-plus-outline' : 'check-circle-outline',
+                id: `day-${key}`,
+                category: isWorkDay ? 'work' : 'leave',
+                sortDate: group.date,
+                dayLabel: String(group.date.getDate()).padStart(2, '0'),
+                monthLabel: MONTHS_TR[group.date.getMonth()].slice(0, 3),
+                yearLabel: String(group.date.getFullYear()),
+                title: isWorkDay ? 'Çalışma Kaydı' : attendanceMeta.title,
+                timeLabel: isWorkDay ? `${formatTimeValue(firstShift?.start_time)} - ${hasOpenShift ? '--:--' : formatTimeValue(lastShift?.end_time)}` : (group.attendance[0]?.note || attendanceMeta.title),
+                detailLabel: isWorkDay ? `${sortedShifts.length} vardiya · Toplam ${formatShortDuration(totalMinutes)}` : `${group.attendance.length} günlük kayıt`,
+                badge: hasOpenShift ? 'Devam ediyor' : isWorkDay ? 'Görüntüle' : attendanceMeta.badge,
+                accent: hasOpenShift ? serviceOrange : isWorkDay ? serviceGreen : attendanceMeta.accent,
+                badgeBg: hasOpenShift ? 'rgba(249,115,22,0.12)' : isWorkDay ? 'rgba(34,197,94,0.12)' : attendanceMeta.bg,
+                icon: hasOpenShift ? 'clock-outline' : isWorkDay ? 'calendar-check-outline' : attendanceMeta.icon,
+                detail: { dateKey: key, shifts: sortedShifts, attendance: group.attendance, totalMinutes },
             };
-        });
-        const leaveItems = attendance.filter((item) => item?.status && ATTENDANCE_META[item.status]).map((item) => {
-            const date = new Date(item.date || Date.now());
-            const meta = ATTENDANCE_META[item.status] || ATTENDANCE_META.leave;
-            return { id: `attendance-${item.id}`, category: 'leave', sortDate: date, dayLabel: String(date.getDate()).padStart(2, '0'), monthLabel: MONTHS_TR[date.getMonth()].slice(0, 3), yearLabel: String(date.getFullYear()), title: meta.title, timeLabel: item?.note || meta.title, detailLabel: '1 gün', badge: meta.badge, accent: meta.accent, badgeBg: meta.bg, icon: meta.icon };
-        });
-        const lateItems = shifts.filter((shift) => shift?.start_time).map((shift) => {
-            const startLabel = formatTimeValue(shift.start_time);
-            const [startHour, startMinute] = startLabel.split(':').map(Number);
-            if (Number.isNaN(startHour) || Number.isNaN(startMinute)) return null;
-            const lateMinutes = (startHour * 60 + startMinute) - (8 * 60 + 30);
-            if (lateMinutes <= 0) return null;
-            const date = new Date(shift?.date || shift?.start_time || Date.now());
-            return { id: `late-${shift.id}`, category: 'late', sortDate: date, dayLabel: String(date.getDate()).padStart(2, '0'), monthLabel: MONTHS_TR[date.getMonth()].slice(0, 3), yearLabel: String(date.getFullYear()), title: 'Geç Giriş', timeLabel: `${startLabel} - ${formatTimeValue(shift.end_time)}`, detailLabel: `${lateMinutes} dk gecikme`, badge: 'Gecikme', accent: serviceRed, badgeBg: 'rgba(239,68,68,0.12)', icon: 'clock-alert-outline' };
-        }).filter(Boolean);
-        return [...workItems, ...leaveItems, ...lateItems].sort((a, b) => b.sortDate - a.sortDate);
+        }).sort((a, b) => b.sortDate - a.sortDate);
     }, [attendance, shifts]);
     const filteredHistory = useMemo(() => activeFilter === 'all' ? historyItems : historyItems.filter((item) => item.category === activeFilter), [activeFilter, historyItems]);
     const monthTitle = useMemo(() => { const [year, month] = currentMonth.split('-').map(Number); return `${MONTHS_TR[month - 1]} ${year}`; }, [currentMonth]);
@@ -201,7 +197,7 @@ export default function ProfileMyShiftsScreen() {
         return <WrapperContainer bg={colors.background}><Header title="Mesailerim" showBack borderBottom /><View style={styles.centerState}><ActivityIndicator size="large" color={colors.primary} /></View></WrapperContainer>;
     }
 
-    return <WrapperContainer bg={colors.background}><Header title="Mesailerim" showBack borderBottom /><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}><View style={styles.titleRow}><View><Text style={[styles.screenTitle, { color: colors.text }]}>Mesailerim</Text><Text style={[styles.screenSubtitle, { color: colors.textSecondary }]}>Mesai ve izin geçmişi</Text></View><View style={[styles.filterButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="tune-variant" size={20} color={serviceBlue} /></View></View><View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.heroTop}><View style={styles.avatarWrap}>{avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={[styles.avatarFallback, { backgroundColor: `${serviceBlue}14` }]}><Text style={[styles.avatarFallbackText, { color: serviceBlue }]}>{initialsOf(fullName)}</Text></View>}<View style={[styles.onlineDot, { backgroundColor: statusMeta.color, borderColor: colors.surface }]} /></View><View style={styles.heroContent}><Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>{fullName}</Text><Text style={[styles.heroRole, { color: colors.textSecondary }]} numberOfLines={1}>{roleLabel}</Text><View style={styles.locationRow}><MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.textSecondary} /><Text style={[styles.locationText, { color: colors.textSecondary }]} numberOfLines={1}>{getProfileLocation(profile)}</Text></View></View><View style={styles.heroStatusWrap}><View style={[styles.statusBadge, { backgroundColor: statusMeta.bg }]}><Text style={[styles.statusBadgeText, { color: statusMeta.color }]}>{statusMeta.label}</Text></View><MaterialCommunityIcons name="dots-vertical" size={20} color={colors.textTertiary} /></View></View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.infoRow}><View style={styles.infoItem}><MaterialCommunityIcons name="clock-outline" size={20} color={serviceBlue} /><View><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>İşe başlama</Text><Text style={[styles.infoValue, { color: colors.text }]}>{shiftStartReference}</Text></View></View><View style={[styles.infoDivider, { backgroundColor: colors.border }]} /><View style={styles.infoItem}><View style={[styles.liveDot, { backgroundColor: statusMeta.color }]} /><View><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Son görülme</Text><Text style={[styles.infoValue, { color: statusMeta.color === serviceGreen ? serviceGreen : colors.text }]}>{getLastSeenLabel(profile?.last_online || profile?.updated_at, Boolean(profile?.is_online || profile?.status === 'online'))}</Text></View></View></View></View><View style={styles.statsGrid}><StatCard icon="calendar-month-outline" label="Bu Ay" value={`${stats.workedDays} Gün`} accent={serviceBlue} colors={colors} /><StatCard icon="clock-outline" label="Toplam Süre" value={formatShortDuration(stats.totalMinutes)} accent={serviceGreen} colors={colors} /><StatCard icon="timer-plus-outline" label="Fazla Mesai" value={formatShortDuration(stats.overtimeMinutes)} accent={serviceOrange} colors={colors} /><StatCard icon="umbrella-outline" label="İzin" value={`${stats.leaveDays} Gün`} accent="#8B5CF6" colors={colors} /></View><FilterPills value={activeFilter} onChange={setActiveFilter} colors={colors} /><View style={[styles.monthCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable onPress={() => handleMonthChange(-1)} style={styles.monthNavBtn}><MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} /></Pressable><View style={styles.monthCenter}><MaterialCommunityIcons name="calendar-month-outline" size={20} color={serviceBlue} /><Text style={[styles.monthLabel, { color: colors.text }]}>{monthTitle}</Text></View><Pressable onPress={() => handleMonthChange(1)} style={styles.monthNavBtn}><MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} /></Pressable></View><View style={styles.historyList}>{filteredHistory.length === 0 ? <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="clipboard-search-outline" size={32} color={colors.textTertiary} /><Text style={[styles.emptyTitle, { color: colors.text }]}>Kayıt bulunamadı</Text><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Seçilen dönem için mesai veya izin kaydı bulunmuyor.</Text></View> : filteredHistory.map((item) => <HistoryRow key={item.id} item={item} colors={colors} />)}</View><View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryTitle, { color: colors.text }]}>Aylık Özet</Text><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Toplam çalışma</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{formatLongDuration(stats.totalMinutes)}</Text></View><View style={[styles.summaryDivider, { backgroundColor: colors.border }]} /><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Fazla mesai</Text><Text style={[styles.summaryValue, { color: serviceOrange }]}>{formatLongDuration(stats.overtimeMinutes)}</Text></View><View style={[styles.summaryDivider, { backgroundColor: colors.border }]} /><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>İzin günü</Text><Text style={[styles.summaryValue, { color: '#8B5CF6' }]}>{stats.leaveDays} gün</Text></View></View></ScrollView></WrapperContainer>;
+    return <WrapperContainer bg={colors.background}><Header title="Mesailerim" showBack borderBottom /><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}><View style={styles.titleRow}><View><Text style={[styles.screenTitle, { color: colors.text }]}>Mesailerim</Text><Text style={[styles.screenSubtitle, { color: colors.textSecondary }]}>Mesai ve izin geçmişi</Text></View><View style={[styles.filterButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="tune-variant" size={20} color={serviceBlue} /></View></View><View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.heroTop}><View style={styles.avatarWrap}>{avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={[styles.avatarFallback, { backgroundColor: `${serviceBlue}14` }]}><Text style={[styles.avatarFallbackText, { color: serviceBlue }]}>{initialsOf(fullName)}</Text></View>}<View style={[styles.onlineDot, { backgroundColor: statusMeta.color, borderColor: colors.surface }]} /></View><View style={styles.heroContent}><Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>{fullName}</Text><Text style={[styles.heroRole, { color: colors.textSecondary }]} numberOfLines={1}>{roleLabel}</Text><View style={styles.locationRow}><MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.textSecondary} /><Text style={[styles.locationText, { color: colors.textSecondary }]} numberOfLines={1}>{getProfileLocation(profile)}</Text></View></View><View style={styles.heroStatusWrap}><View style={[styles.statusBadge, { backgroundColor: statusMeta.bg }]}><Text style={[styles.statusBadgeText, { color: statusMeta.color }]}>{statusMeta.label}</Text></View><MaterialCommunityIcons name="dots-vertical" size={20} color={colors.textTertiary} /></View></View><View style={[styles.divider, { backgroundColor: colors.border }]} /><View style={styles.infoRow}><View style={styles.infoItem}><MaterialCommunityIcons name="clock-outline" size={20} color={serviceBlue} /><View><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>İşe başlama</Text><Text style={[styles.infoValue, { color: colors.text }]}>{shiftStartReference}</Text></View></View><View style={[styles.infoDivider, { backgroundColor: colors.border }]} /><View style={styles.infoItem}><View style={[styles.liveDot, { backgroundColor: statusMeta.color }]} /><View><Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Son görülme</Text><Text style={[styles.infoValue, { color: statusMeta.color === serviceGreen ? serviceGreen : colors.text }]}>{getLastSeenLabel(profile?.last_online || profile?.updated_at, Boolean(profile?.is_online || profile?.status === 'online'))}</Text></View></View></View></View><View style={styles.statsGrid}><StatCard icon="calendar-month-outline" label="Bu Ay" value={`${stats.workedDays} Gün`} accent={serviceBlue} colors={colors} /><StatCard icon="clock-outline" label="Toplam Süre" value={formatShortDuration(stats.totalMinutes)} accent={serviceGreen} colors={colors} /><StatCard icon="timer-plus-outline" label="Vardiya" value={`${stats.shiftCount} Kayıt`} accent={serviceOrange} colors={colors} /><StatCard icon="umbrella-outline" label="İzin" value={`${stats.leaveDays} Gün`} accent="#8B5CF6" colors={colors} /></View><FilterPills value={activeFilter} onChange={setActiveFilter} colors={colors} /><View style={[styles.monthCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Pressable onPress={() => handleMonthChange(-1)} style={styles.monthNavBtn}><MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} /></Pressable><View style={styles.monthCenter}><MaterialCommunityIcons name="calendar-month-outline" size={20} color={serviceBlue} /><Text style={[styles.monthLabel, { color: colors.text }]}>{monthTitle}</Text></View><Pressable onPress={() => handleMonthChange(1)} style={styles.monthNavBtn}><MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} /></Pressable></View><View style={styles.historyList}>{filteredHistory.length === 0 ? <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><MaterialCommunityIcons name="clipboard-search-outline" size={32} color={colors.textTertiary} /><Text style={[styles.emptyTitle, { color: colors.text }]}>Kayıt bulunamadı</Text><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Seçilen dönem için mesai veya izin kaydı bulunmuyor.</Text></View> : filteredHistory.map((item) => <HistoryRow key={item.id} item={item} colors={colors} onPress={() => navigation.navigate('ProfileShiftDetail', { day: item.detail })} />)}</View><View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryTitle, { color: colors.text }]}>Aylık Özet</Text><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Toplam çalışma</Text><Text style={[styles.summaryValue, { color: colors.text }]}>{formatLongDuration(stats.totalMinutes)}</Text></View><View style={[styles.summaryDivider, { backgroundColor: colors.border }]} /><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Vardiya kaydı</Text><Text style={[styles.summaryValue, { color: serviceOrange }]}>{`${stats.shiftCount} kayıt`}</Text></View><View style={[styles.summaryDivider, { backgroundColor: colors.border }]} /><View style={styles.summaryRow}><Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>İzin günü</Text><Text style={[styles.summaryValue, { color: '#8B5CF6' }]}>{stats.leaveDays} gün</Text></View></View></ScrollView></WrapperContainer>;
 }
 const styles = StyleSheet.create({
     content: { paddingHorizontal: spacing.gutter, paddingTop: spacing.l, paddingBottom: spacing['5xl'], gap: spacing.m },

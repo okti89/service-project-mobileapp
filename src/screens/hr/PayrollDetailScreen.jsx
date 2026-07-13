@@ -14,7 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
-import Share from 'react-native-share';
+import { getNativeShare } from '@/utils/nativeShare';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -60,7 +60,7 @@ export default function PayrollDetailScreen({ route, navigation }) {
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useTheme();
     const { showToast } = useToast();
-    const { isTechnician } = useAuth();
+    const { isAdmin, isTechnician } = useAuth();
 
     const [payroll, setPayroll] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -202,8 +202,13 @@ export default function PayrollDetailScreen({ route, navigation }) {
 
         setPdfSharing(true);
         try {
+            const nativeShare = getNativeShare();
+            if (!nativeShare) {
+                showToast('warning', 'Dev Modu', 'WhatsApp PDF gonderimi bu development build icinde kapali.');
+                return;
+            }
             if (Platform.OS === 'android') {
-                const { isInstalled } = await Share.isPackageInstalled('com.whatsapp');
+                const { isInstalled } = await nativeShare.isPackageInstalled('com.whatsapp');
                 if (!isInstalled) {
                     Alert.alert('WhatsApp bulunamadı', 'Cihazda WhatsApp yüklü değil.');
                     setPdfSharing(false);
@@ -233,8 +238,8 @@ export default function PayrollDetailScreen({ route, navigation }) {
                 encoding: FileSystem.EncodingType.Base64,
             });
 
-            await Share.shareSingle({
-                social: Share.Social.WHATSAPP,
+            await nativeShare.shareSingle({
+                social: nativeShare.Social.WHATSAPP,
                 whatsAppNumber: numara,
                 url: `data:application/pdf;base64,${pdfBase64}`,
                 type: 'application/pdf',
@@ -288,7 +293,7 @@ export default function PayrollDetailScreen({ route, navigation }) {
                 showBack
                 borderBottom
                 rightActions={
-                    !isTechnician
+                    isAdmin
                         ? [{
                             icon: 'pencil-outline',
                             color: serviceBlue,
@@ -410,12 +415,12 @@ export default function PayrollDetailScreen({ route, navigation }) {
                         ) : (
                             <>
                                 <MaterialCommunityIcons name="file-pdf-box" size={20} color={serviceBlue} style={{ marginRight: 6 }} />
-                                <Text style={[styles.actionBtnText, { color: serviceBlue }]}>PDF Paylaş</Text>
+                                <Text style={[styles.actionBtnText, { color: serviceBlue }]}>PDF Görüntüle</Text>
                             </>
                         )}
                     </Pressable>
 
-                    {!isTechnician && (
+                    {isAdmin && (
                         <Pressable
                             onPress={handleWhatsAppShare}
                             disabled={pdfSharing}
@@ -432,7 +437,7 @@ export default function PayrollDetailScreen({ route, navigation }) {
                 </View>
 
                 {/* Admin Durum Yönetimi */}
-                {!isTechnician && (
+                {isAdmin && (
                     <View style={[styles.statusManageBox, { backgroundColor: colors.surface, borderColor: border }]}>
                         <Text style={[styles.statusManageTitle, { color: colors.text }]}>Bordro Durumunu Yönet</Text>
                         <View style={styles.statusButtons}>
@@ -480,7 +485,7 @@ export default function PayrollDetailScreen({ route, navigation }) {
                 )}
 
                 {/* Admin Kayıt Silme Butonu */}
-                {!isTechnician && (
+                {isAdmin && (
                     <Pressable
                         onPress={handleDelete}
                         disabled={actionLoading}
