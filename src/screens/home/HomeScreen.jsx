@@ -43,7 +43,7 @@ import { typography } from "@/theme/typography";
 
 export default function HomeScreen({ navigation }) {
     const { colors, isDark } = useTheme();
-    const { userInfo, isAdmin } = useAuth();
+    const { userInfo, isAdmin, syncLocationTrackingByShift } = useAuth();
     const { unreadCount, updateUnreadCount } = useNotifications() || { unreadCount: 0 };
     const { config } = useConfig();
     const { showToast } = useToast();
@@ -168,6 +168,7 @@ export default function HomeScreen({ navigation }) {
             try {
                 setShiftActionLoading(true);
                 await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
+                await syncLocationTrackingByShift();
                 showToast('success', 'Mesai Başladı', 'Mesainiz başarıyla başlatıldı.');
                 fetchData();
             } catch (err) {
@@ -183,6 +184,7 @@ export default function HomeScreen({ navigation }) {
             setShiftConfirmVisible(false);
             setShiftActionLoading(true);
             await api.post(ENDPOINTS.TECHNICIAN.SHIFT_STOP);
+            await syncLocationTrackingByShift();
             showToast('success', 'Mesai Bitti', 'Mesainiz başarıyla sonlandırıldı.');
             fetchData();
         } catch (err) {
@@ -745,6 +747,7 @@ export default function HomeScreen({ navigation }) {
                                         setShiftWarningVisible(false);
                                         setShiftActionLoading(true);
                                         await api.post(ENDPOINTS.TECHNICIAN.SHIFT_STOP);
+                                        await syncLocationTrackingByShift();
                                         showToast('success', 'Mesai Kapatıldı', 'Açık mesai kaydınız kapatıldı.');
                                         fetchData();
                                     } catch (err) {
