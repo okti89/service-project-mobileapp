@@ -15,7 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
-import Share from 'react-native-share';
+import { getNativeShare } from '@/utils/nativeShare';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -363,8 +363,13 @@ export default function PayrollScreen({ navigation, route }) {
 
         setSharingId(payroll.id);
         try {
+            const nativeShare = getNativeShare();
+            if (!nativeShare) {
+                showToast('warning', 'Dev Modu', 'WhatsApp PDF gonderimi bu development build icinde kapali.');
+                return;
+            }
             if (Platform.OS === 'android') {
-                const { isInstalled } = await Share.isPackageInstalled('com.whatsapp');
+                const { isInstalled } = await nativeShare.isPackageInstalled('com.whatsapp');
                 if (!isInstalled) {
                     Alert.alert('WhatsApp bulunamadı', 'Cihazda WhatsApp yüklü değil.');
                     setSharingId(null);
@@ -394,8 +399,8 @@ export default function PayrollScreen({ navigation, route }) {
                 encoding: FileSystem.EncodingType.Base64,
             });
 
-            await Share.shareSingle({
-                social: Share.Social.WHATSAPP,
+            await nativeShare.shareSingle({
+                social: nativeShare.Social.WHATSAPP,
                 whatsAppNumber: temizNumara,
                 url: `data:application/pdf;base64,${pdfBase64}`,
                 type: 'application/pdf',
@@ -738,3 +743,4 @@ const styles = StyleSheet.create({
     emptyTitle: { fontSize: 16, fontWeight: '700' },
     emptyDesc: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
 });
+

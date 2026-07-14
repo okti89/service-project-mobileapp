@@ -23,6 +23,9 @@ import NetworkStatus from "@/components/NetworkStatus";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { NetworkProvider } from "@/context/NetworkContext";
 
+// Keep the native splash visible while fonts and the initial auth state load.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 
 
 

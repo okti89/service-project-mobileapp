@@ -73,7 +73,10 @@ const CustomerCard = ({ customer, onPress, onEdit, navigation }) => {
 
     const handleServices = (e) => {
         e.stopPropagation();
-        navigation.navigate('ServiceList', { customerId: customer.id });
+        navigation.navigate('AdminCustomerServices', {
+            customerId: customer.id,
+            customerName: fullName,
+        });
     };
 
     return (
@@ -209,7 +212,7 @@ export default function CustomerListScreen({ navigation }) {
     });
 
     return (
-        <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+        <View style={[styles.screen, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>

@@ -13,21 +13,21 @@ import AccountPendingScreen from '@/screens/account-status/AccountPendingScreen'
  * çünkü pasif/onaysız kullanıcılar uygulamanın geri kalanına erişememelidir.
  */
 export default function AccountStatusGate({ children }) {
-    const { user, userInfo, isAuthenticated } = useAuth();
+    const { userInfo, isLoggedIn } = useAuth();
 
     const status = useMemo(() => {
-        if (!isAuthenticated || !user) {
+        if (!isLoggedIn || !userInfo) {
             return { kind: 'auth-missing', allow: false };
         }
         const approval = String(userInfo?.approval_status || '').toLowerCase();
-        if (approval === 'rejected' || userInfo?.is_active === false) {
-            return { kind: 'deactivated' };
-        }
         if (approval === 'pending' || userInfo?.is_approved === false) {
             return { kind: 'pending' };
         }
+        if (approval === 'rejected' || userInfo?.is_active === false) {
+            return { kind: 'deactivated' };
+        }
         return { kind: 'ok', allow: true };
-    }, [isAuthenticated, user, userInfo]);
+    }, [isLoggedIn, userInfo]);
 
     useFocusEffect(
         useCallback(() => {
@@ -48,6 +48,9 @@ export default function AccountStatusGate({ children }) {
     }
     if (status.kind === 'pending') {
         return <AccountPendingScreen />;
+    }
+    if (status.kind === 'auth-missing') {
+        return null;
     }
     return children;
 }

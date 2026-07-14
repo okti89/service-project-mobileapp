@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/api/axios';
 import Header from '@/components/Header';
@@ -59,6 +60,7 @@ const formatPhoneNumber = (value) => {
 export default function AdminCompanySettingsScreen({ navigation }) {
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useTheme();
+    const { userInfo } = useAuth();
     const { showToast } = useToast();
 
     // Sekmeler: 'profile', 'hours', 'holidays'
@@ -71,7 +73,8 @@ export default function AdminCompanySettingsScreen({ navigation }) {
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
-    const [maxUsers, setMaxUsers] = useState('10');
+    const [maxUsers, setMaxUsers] = useState('');
+    const [activeUsersCount, setActiveUsersCount] = useState(0);
     const [tenantCode, setTenantCode] = useState('');
     const [logoUri, setLogoUri] = useState(null);
     const [selectedLogoFile, setSelectedLogoFile] = useState(null);
@@ -82,7 +85,6 @@ export default function AdminCompanySettingsScreen({ navigation }) {
     const phoneInputRef = useRef(null);
     const emailInputRef = useRef(null);
     const addressInputRef = useRef(null);
-    const maxUsersInputRef = useRef(null);
 
     // ─── 2. ÇALIŞMA SAATLERİ STATE'LERİ ──────────────────────────────────────
     const [workingHours, setWorkingHours] = useState([]);
@@ -134,8 +136,9 @@ export default function AdminCompanySettingsScreen({ navigation }) {
                 setPhone(formatPhoneNumber(cfg.phone_number || ''));
                 setEmail(cfg.email || '');
                 setAddress(cfg.address || '');
-                setMaxUsers(String(cfg.max_users ?? 10));
-                setTenantCode(cfg.tenant_code || '');
+                setMaxUsers(String(cfg.max_users ?? 0));
+                setActiveUsersCount(Number(cfg.active_users_count || 0));
+                setTenantCode(String(cfg.tenant_code || cfg.tenant?.code || userInfo?.tenant_code || '').trim());
                 setLogoUri(cfg.logo || null);
 
                 const [hoursRes, holidaysRes] = await Promise.all([
@@ -152,7 +155,7 @@ export default function AdminCompanySettingsScreen({ navigation }) {
         } finally {
             setLoading(false);
         }
-    }, [showToast]);
+    }, [showToast, userInfo?.tenant_code]);
 
     useEffect(() => {
         fetchAllData();
@@ -171,7 +174,6 @@ export default function AdminCompanySettingsScreen({ navigation }) {
             formData.append('phone_number', rawPhone);
             formData.append('email', email);
             formData.append('address', address);
-            formData.append('max_users', maxUsers);
 
             if (selectedLogoFile) {
                 formData.append('logo', {
@@ -502,32 +504,25 @@ export default function AdminCompanySettingsScreen({ navigation }) {
                                             />
                                         </Pressable>
 
-                                        {/* Max Kullanıcı & Firma Kodu (Read-Only) */}
+                                        {/* Kullanıcı limiti ve firma kodu salt okunurdur. */}
                                         <View style={{ flexDirection: 'row', gap: 10 }}>
-                                            <Pressable
-                                                onPress={() => maxUsersInputRef.current?.focus()}
-                                                style={[styles.inputGroup, { backgroundColor: cardBg, borderColor: border, flex: 1 }]}
-                                            >
+                                            <View style={[styles.inputGroup, { backgroundColor: colors.background, borderColor: border, flex: 1, opacity: 0.8 }]}>
                                                 <View style={styles.inputHeader}>
                                                     <MaterialCommunityIcons name="account-group" size={16} color="#0EA5E9" />
-                                                    <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Max Kullanıcı</Text>
+                                                    <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Kullanıcı Limiti</Text>
                                                 </View>
-                                                <TextInput
-                                                    ref={maxUsersInputRef}
-                                                    value={maxUsers}
-                                                    onChangeText={setMaxUsers}
-                                                    keyboardType="number-pad"
-                                                    style={[styles.textInput, { color: colors.text }]}
-                                                />
-                                            </Pressable>
+                                                <Text style={[styles.textInputVal, { color: colors.textSecondary }]}>
+                                                    {Number(maxUsers) > 0 ? `${activeUsersCount} / ${maxUsers} kullanıcı` : `${activeUsersCount} kullanıcı (sınırsız)`}
+                                                </Text>
+                                            </View>
 
-                                            <View style={[styles.inputGroup, { backgroundColor: colors.background, borderColor: border, flex: 1, opacity: 0.8 }]}>
+                                            {tenantCode ? <View style={[styles.inputGroup, { backgroundColor: colors.background, borderColor: border, flex: 1, opacity: 0.8 }]}>
                                                 <View style={styles.inputHeader}>
                                                     <MaterialCommunityIcons name="key" size={16} color="#64748B" />
                                                     <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Firma Kodu</Text>
                                                 </View>
-                                                <Text style={[styles.textInputVal, { color: colors.textSecondary }]}>{tenantCode || '-'}</Text>
-                                            </View>
+                                                <Text style={[styles.textInputVal, { color: colors.textSecondary }]}>{tenantCode}</Text>
+                                            </View> : null}
                                         </View>
 
                                         {/* Kaydet Butonu */}

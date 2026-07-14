@@ -461,6 +461,11 @@ export default function AdminTechniciansScreen() {
             navigation.navigate('TechnicianLocations', { technicianId: tech.id });
         } else if (action === 'shifts') {
             navigation.navigate('TechnicianShifts', { technicianId: tech.id });
+        } else if (action === 'services') {
+            navigation.navigate('AdminTechnicianServices', {
+                technicianId: tech.id,
+                technicianName: getFullName(tech),
+            });
         } else if (action === 'leave') {
             navigation.navigate('AdminTechnicianLeaves', { technicianId: tech.id });
         } else {

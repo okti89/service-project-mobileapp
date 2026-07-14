@@ -60,7 +60,7 @@ export default function ProfilePersonalInfoScreen() {
     const { userInfo } = useAuth();
     const { config } = useConfig();
 
-    const fullName = userInfo?.full_name || [userInfo?.first_name, userInfo?.last_name].filter(Boolean).join(' ') || userInfo?.email || 'Kullanici';
+    const fullName = userInfo?.full_name || [userInfo?.first_name, userInfo?.last_name].filter(Boolean).join(' ') || 'Kullanici';
     const avatarUri = resolveMediaUrl(userInfo?.avatar);
     const joinedDate = userInfo?.date_joined ? new Date(userInfo.date_joined).toLocaleDateString('tr-TR') : '-';
     const rows = useMemo(() => ([
@@ -84,7 +84,7 @@ export default function ProfilePersonalInfoScreen() {
                             <Text style={[styles.avatarFallbackText, { color: colors.primary }]}>{initialsOf(fullName)}</Text>
                         </View>
                     )}
-                    <Text style={[styles.heroName, { color: colors.text }]}>{fullName}</Text>
+                    <Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>{fullName}</Text>{userInfo?.email ? <Text style={[styles.emailText, { color: colors.textSecondary }]} numberOfLines={1}>{userInfo.email}</Text> : null}
                     <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>{userInfo?.user_type_display || '-'}</Text>
                 </View>
 
@@ -112,37 +112,40 @@ const styles = StyleSheet.create({
     },
     heroCard: {
         borderWidth: 1,
-        borderRadius: 24,
-        padding: spacing.xl,
+        borderRadius: 20,
+        padding: spacing.l,
         alignItems: 'center',
         gap: spacing.s,
     },
     avatar: {
-        width: 104,
-        height: 104,
-        borderRadius: 30,
+        width: 72,
+        height: 72,
+        borderRadius: 22,
     },
     avatarFallback: {
-        width: 104,
-        height: 104,
-        borderRadius: 30,
+        width: 72,
+        height: 72,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
     },
     avatarFallbackText: {
-        fontSize: 32,
+        fontSize: 22,
         fontWeight: '800',
     },
     heroName: {
-        ...typography.h3,
+        ...typography.body,
         fontWeight: '800',
+    },
+    emailText: {
+        ...typography.caption,
     },
     heroSubtitle: {
         ...typography.bodySmall,
     },
     detailCard: {
         borderWidth: 1,
-        borderRadius: 24,
+        borderRadius: 20,
         paddingHorizontal: spacing.l,
     },
     detailRow: {

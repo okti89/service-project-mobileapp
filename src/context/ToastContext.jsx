@@ -16,7 +16,7 @@ export const useToast = () => {
 const TYPE_META = {
     success: { color: '#16A34A', icon: 'check' },
     error: { color: '#DC2626', icon: 'close' },
-    warning: { color: '#F59E0B', icon: 'warning' },
+    warning: { color: '#F59E0B', icon: 'alert-circle-outline' },
     info: { color: '#0284C7', icon: 'information' },
 };
 

@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     },
     card: {
         borderWidth: 1,
-        borderRadius: 24,
+        borderRadius: 20,
         padding: spacing.l,
         gap: spacing.s,
     },
@@ -261,19 +261,19 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
     },
     avatar: {
-        width: 108,
-        height: 108,
-        borderRadius: 32,
+        width: 80,
+        height: 80,
+        borderRadius: 24,
     },
     avatarFallback: {
-        width: 108,
-        height: 108,
-        borderRadius: 32,
+        width: 80,
+        height: 80,
+        borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
     },
     avatarFallbackText: {
-        fontSize: 34,
+        fontSize: 24,
         fontWeight: '800',
     },
     editBadge: {

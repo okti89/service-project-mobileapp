@@ -3,8 +3,14 @@ import axios from 'axios';
 import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const devMode = false
+const devUrl = 'http://10.147.95.195:8000/api'
+export const proUrl = 'https://imrpx8h1iihplrf4rs1ssbqo.5.75.152.139.sslip.io/api';
+export const PRIVACY_POLICY_URL = proUrl.replace(/\/api$/, '/privacy-policy/');
+
+
 const api = axios.create({
-    baseURL: 'https://imrpx8h1iihplrf4rs1ssbqo.5.75.152.139.sslip.io/api',
+    baseURL: devMode ? devUrl : proUrl,
     timeout: 10000,
 });
 

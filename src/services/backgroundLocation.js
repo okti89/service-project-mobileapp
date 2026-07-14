@@ -6,12 +6,17 @@ import ENDPOINTS from '@/api/endpoints';
 
 const BACKGROUND_LOCATION_TASK = 'background-location-task';
 const LAST_LOCATION_META_KEY = 'last_location_sent_meta';
-const MIN_SEND_INTERVAL_MS = 1000 * 60; // 1 dakika
-const MIN_SEND_DISTANCE_METERS = 300; // 300 metre
+const MIN_SEND_INTERVAL_MS = 1000 * 60 * 10; // 10 dakika
+const MIN_SEND_DISTANCE_METERS = 1000; // 1 kilometre
 const MIN_RECEIVED_LOG_INTERVAL_MS = 1000 * 60; // 1 dakika
 
 let isSendingInProgress = false;
 let lastReceivedLogAt = 0;
+
+function isMissingBackgroundTaskError(error) {
+    const message = String(error?.message || error || '');
+    return message.includes('TaskNotFoundException') || /task .* not found/i.test(message);
+}
 
 async function sendLocationToBackend(latitude, longitude) {
     try {
@@ -92,6 +97,7 @@ async function markLocationSent(latitude, longitude) {
 }
 
 export async function sendCurrentLocationNow() {
+    if (isSendingInProgress) return;
     try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
@@ -105,8 +111,13 @@ export async function sendCurrentLocationNow() {
         const { latitude, longitude } = current.coords || {};
         if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
         if (!(await shouldSendLocation(latitude, longitude))) return;
-        await sendLocationToBackend(latitude, longitude);
-        await markLocationSent(latitude, longitude);
+        isSendingInProgress = true;
+        try {
+            await sendLocationToBackend(latitude, longitude);
+            await markLocationSent(latitude, longitude);
+        } finally {
+            isSendingInProgress = false;
+        }
     } catch (error) {
         console.log('[BG Location] Instant send failed:', error?.message || error);
     }
@@ -141,12 +152,17 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     }
 });
 
-export async function startBackgroundLocationTracking() {
+export async function startBackgroundLocationTracking({ hasDisclosureConsent = false } = {}) {
+    if (!hasDisclosureConsent) return false;
     try {
         const isRunning = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
         if (isRunning) {
             console.log('[BG Location] Already running, stopping first to apply new settings.');
-            await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+            try {
+                await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+            } catch (error) {
+                if (!isMissingBackgroundTaskError(error)) throw error;
+            }
         }
 
         const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
@@ -177,8 +193,10 @@ export async function startBackgroundLocationTracking() {
 
         await sendCurrentLocationNow();
         console.log('[BG Location] Background tracking started.');
+        return true;
     } catch (error) {
         console.error('[BG Location] Failed to start:', error);
+        return false;
     }
 }
 
@@ -186,10 +204,16 @@ export async function stopBackgroundLocationTracking() {
     try {
         const isRunning = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
         if (isRunning) {
-            await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
-            console.log('[BG Location] Background tracking stopped.');
+            try {
+                await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+                console.log('[BG Location] Background tracking stopped.');
+            } catch (error) {
+                if (isMissingBackgroundTaskError(error)) return;
+                throw error;
+            }
         }
     } catch (error) {
+        if (isMissingBackgroundTaskError(error)) return;
         console.error('[BG Location] Failed to stop:', error);
     }
 }

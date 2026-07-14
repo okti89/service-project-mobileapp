@@ -382,7 +382,7 @@ export default function ProfilePerformanceScreen({ navigation }) {
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>Genel Performans Özeti</Text>
                     <SummaryRow icon="timer-outline" label="Tamamlama Oranı" value={'%' + metrics.completionRate} accent={serviceBlue} colors={colors} />
                     <SummaryRow icon="check-decagram-outline" label="Tamamlanan Servis" value={String(metrics.completed)} accent={serviceGreen} colors={colors} />
-                    <SummaryRow icon="refresh-circle-outline" label="Açık Servis" value={String(metrics.open)} accent={serviceOrange} colors={colors} />
+                    <SummaryRow icon="progress-clock" label="Açık Servis" value={String(metrics.open)} accent={serviceOrange} colors={colors} />
                     <SummaryRow icon="close-circle-outline" label="İptal / Erteleme" value={String(metrics.cancelled)} accent={serviceRed} colors={colors} />
                 </View>
 

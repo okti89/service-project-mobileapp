@@ -104,15 +104,6 @@ const requestLocation = async () => {
     try {
         const fg = await Location.requestForegroundPermissionsAsync();
         if (fg?.status !== 'granted') return false;
-
-        // Arka plan iznini de iste (kullanıcıya sistem dialogu gösterilir),
-        // ama reddedilse/atlansa bile bunu genel başarısızlık saymıyoruz.
-        try {
-            await Location.requestBackgroundPermissionsAsync();
-        } catch (e) {
-            // ignore
-        }
-
         return true;
     } catch (e) {
         return false;

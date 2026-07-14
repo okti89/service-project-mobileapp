@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfig } from '@/context/ConfigContext';
+import { useToast } from '@/context/ToastContext';
 import WrapperContainer from '@/components/WrapperContainer';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 
@@ -102,6 +103,7 @@ function SupportSheet({ sheetRef, onClose }) {
 const AccountPendingScreen = () => {
     const { colors, isDark } = useTheme();
     const { logout, checkAuth } = useAuth();
+    const { showToast } = useToast();
     const { config } = useConfig();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isContactOpen, setIsContactOpen] = useState(false);
@@ -112,8 +114,18 @@ const AccountPendingScreen = () => {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await checkAuth();
-        setIsRefreshing(false);
+        try {
+            const result = await checkAuth();
+            if (result?.kind === 'pending' || result?.kind === 'cached') {
+                showToast('info', 'Onay Bekleniyor', 'Hesabınız henüz yönetici onayı bekliyor.');
+            } else if (result?.kind === 'active') {
+                showToast('success', 'Hesabınız Onaylandı', 'Uygulamaya yönlendiriliyorsunuz.');
+            } else if (result?.kind === 'deactivated' || result?.kind === 'rejected') {
+                showToast('warning', 'Hesap Kullanıma Kapalı', 'Hesap durumunuz değişti.');
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     return (

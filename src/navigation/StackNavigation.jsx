@@ -33,28 +33,32 @@ import ProfilePersonalInfoScreen from "@/screens/profile/ProfilePersonalInfoScre
 import ProfilePerformanceScreen from "@/screens/profile/ProfilePerformanceScreen";
 import ProfileMyShiftsScreen from "@/screens/profile/ProfileMyShiftsScreen";
 import ProfileShiftDetailScreen from "@/screens/profile/ProfileShiftDetailScreen";
+import ProfileDeleteAccountScreen from "@/screens/profile/ProfileDeleteAccountScreen";
+import PrivacyPolicyScreen from "@/screens/settings/PrivacyPolicyScreen";
 import CreateServiceScreen from "@/screens/services/CreateServiceScreen";
+import LocationMapScreen from "@/screens/maps/LocationMapScreen";
+import ServicesScreen from "@/screens/services/ServicesScreen";
 
 
 const Stack = createStackNavigator();
 
-const AuthStack = () => {
+const AuthStack = ({ initialRouteName }) => {
     const { colors } = useTheme();
     return (
         <Stack.Navigator
-            initialRouteName="Landing"
+            initialRouteName={initialRouteName}
             screenOptions={{
                 headerStyle: { backgroundColor: colors.surface },
                 headerTintColor: colors.text,
                 contentStyle: { backgroundColor: colors.background },
             }}
         >
-            <Stack.Screen name="Landing" component={LandingScreen} options={{ title: 'BaÅŸlangÄ±Ã§ EkranÄ±', headerShown: false }} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'GiriÅŸ Yap', headerShown: false }} />
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'KayÄ±t Ol', headerShown: false }} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Åifremi Unuttum', headerShown: false }} />
-            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Åifre SÄ±fÄ±rla', headerShown: false }} />
-            <Stack.Screen name="ResetCode" component={ResetCodeScreen} options={{ title: 'Åifre SÄ±fÄ±rlama Kodu', headerShown: false }} />
+            <Stack.Screen name="Landing" component={LandingScreen} options={{ title: 'Başlangıç Ekranı', headerShown: false }} />
+            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Giriş Yap', headerShown: false }} />
+            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Kayıt Ol', headerShown: false }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Şifremi Unuttum', headerShown: false }} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Şifre Sıfırla', headerShown: false }} />
+            <Stack.Screen name="ResetCode" component={ResetCodeScreen} options={{ title: 'Şifre Sıfırlama Kodu', headerShown: false }} />
         </Stack.Navigator>
     );
 };
@@ -74,7 +78,6 @@ const AppStack = () => {
             <Stack.Screen name="AppErrorBoundaryPreview" component={AppErrorBoundaryPreview} />
             <Stack.Screen name="CustomSplash" component={CustomSplashScreen} />
             <Stack.Screen name="DevModals" component={DevModals} />
-            <Stack.Screen name="Landing" component={LandingScreen} />
             <Stack.Screen name="AppErrorBoundary" component={AppErrorBoundary} />
             <Stack.Screen name="NetworkStatus" component={NetworkStatus} />
             <Stack.Screen name="AdminTechnicians" component={AdminTechniciansScreen} />
@@ -93,21 +96,26 @@ const AppStack = () => {
             <Stack.Screen name="ProfilePerformance" component={ProfilePerformanceScreen} />
             <Stack.Screen name="ProfileMyShifts" component={ProfileMyShiftsScreen} />
             <Stack.Screen name="ProfileShiftDetail" component={ProfileShiftDetailScreen} />
+            <Stack.Screen name="ProfileDeleteAccount" component={ProfileDeleteAccountScreen} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
             <Stack.Screen name="CreateService" component={CreateServiceScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'GiriÅŸ Yap', headerShown: false }} />
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'KayÄ±t Ol', headerShown: false }} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Åifremi Unuttum', headerShown: false }} />
-            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Åifre SÄ±fÄ±rla', headerShown: false }} />
-            <Stack.Screen name="ResetCode" component={ResetCodeScreen} options={{ title: 'Åifre SÄ±fÄ±rlama Kodu', headerShown: false }} />
+            <Stack.Screen name="LocationMap" component={LocationMapScreen} options={{ presentation: 'transparentModal', cardStyle: { backgroundColor: 'transparent' }, cardOverlayEnabled: false }} />
+            <Stack.Screen name="ServiceList" component={ServicesScreen} />
         </Stack.Navigator>
     );
 };
 
 const StackNavigation = () => {
-    const { isLoggedIn } = useAuth();
+    const { isLoggedIn, shouldShowOnboarding } = useAuth();
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {isLoggedIn ? <Stack.Screen name="App" component={AppStack} /> : <Stack.Screen name="Auth" component={AuthStack} />}
+            {isLoggedIn ? (
+                <Stack.Screen name="App" component={AppStack} />
+            ) : (
+                <Stack.Screen name="Auth">
+                    {() => <AuthStack initialRouteName={shouldShowOnboarding ? 'Landing' : 'Login'} />}
+                </Stack.Screen>
+            )}
         </Stack.Navigator>
     );
 };

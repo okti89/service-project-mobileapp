@@ -15,6 +15,7 @@ import ProductListScreen from "@/screens/products/ProductListScreen";
 import ProductFormScreen from "@/screens/products/ProductFormScreen";
 import ProductDetailScreen from "@/screens/products/ProductDetailScreen";
 import TechnicianDetailScreen from "@/screens/technician/TechnicianDetailScreen";
+import TechnicianServicesScreen from "@/screens/technician/TechnicianServicesScreen";
 import PayrollScreen from "@/screens/hr/PayrollScreen";
 import PayrollFormScreen from "@/screens/hr/PayrollFormScreen";
 import PayrollDetailScreen from "@/screens/hr/PayrollDetailScreen";
@@ -41,11 +42,13 @@ export default function AdminPanelNavigator() {
             <Stack.Screen name="AdminTechnicianLeaves" component={AdminTechnicianLeavesScreen} />
             <Stack.Screen name="AdminCustomers" component={CustomerListScreen} />
             <Stack.Screen name="AdminCustomerDetail" component={CustomerDetailScreen} />
+            <Stack.Screen name="AdminCustomerServices" component={TechnicianServicesScreen} />
             <Stack.Screen name="AdminCustomerForm" component={CustomerFormScreen} />
             <Stack.Screen name="AdminProducts" component={ProductListScreen} />
             <Stack.Screen name="AdminProductDetail" component={ProductDetailScreen} />
             <Stack.Screen name="AdminProductForm" component={ProductFormScreen} />
             <Stack.Screen name="AdminTechnicianDetail" component={TechnicianDetailScreen} />
+            <Stack.Screen name="AdminTechnicianServices" component={TechnicianServicesScreen} />
             <Stack.Screen name="AdminPayroll" component={PayrollScreen} />
             <Stack.Screen name="AdminPayrollForm" component={PayrollFormScreen} />
             <Stack.Screen name="AdminPayrollDetail" component={PayrollDetailScreen} />

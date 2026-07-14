@@ -83,15 +83,10 @@ const FloatingTracker = () => {
     };
 
     const handleOpenTracking = () => {
-        try {
-            navigation.navigate('Admin', { screen: 'AdminLiveTracking' });
-        } catch (error) {
-            try {
-                navigation.navigate('AdminLiveTracking');
-            } catch (innerError) {
-                console.log('[FloatingTracker] Navigation failed:', innerError);
-            }
-        }
+        navigation.navigate('TechnicianLocations', {
+            technicianId: trackedTechnician.technicianId,
+            technicianName: trackedTechnician.fullName,
+        });
     };
 
     const timeAgo = lastKnownLocation?.createdAt

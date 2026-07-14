@@ -7,7 +7,8 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { AppState, DeviceEventEmitter } from 'react-native';
+import { Alert, AppState, DeviceEventEmitter } from 'react-native';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import api from '@/api/axios';
@@ -25,6 +26,7 @@ const ONBOARDING_VERSION = 'v1';
 const ONBOARDING_VERSION_KEY = 'onboarding_version_seen';
 const TENANT_CODE_KEY = 'tenant_code';
 const AUTH_CHECK_TIMEOUT_MS = 4000;
+const BACKGROUND_LOCATION_DISCLOSURE_KEY = 'background_location_disclosure_v1';
 const EMPTY_PERMISSIONS = Object.freeze({});
 
 const formatDateForApi = (date = new Date()) => {
@@ -113,6 +115,34 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
+    const requestBackgroundLocationConsent = useCallback(async () => {
+        const disclosureKey = BACKGROUND_LOCATION_DISCLOSURE_KEY + ':' + (userInfo?.id || 'unknown');
+        const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+        if (backgroundPermission.status === 'granted') return true;
+
+        const previouslyAccepted = await AsyncStorage.getItem(disclosureKey);
+        if (previouslyAccepted === 'accepted') {
+            const permission = await Location.requestBackgroundPermissionsAsync();
+            return permission.status === 'granted';
+        }
+
+        const accepted = await new Promise((resolve) => {
+            Alert.alert(
+                'Arka Planda Konum Takibi',
+                'Aktif vardiyanız sırasında Servis Asistanı, uygulama ekranda değilken konumunuzu en fazla 10 dakikada bir veya 1 kilometre hareket ettiğinizde servis sistemine gönderir. Bu veri yalnızca yetkili yöneticilerin aktif saha görevini takip etmesi için kullanılır; reklam veya profil oluşturma amacıyla kullanılmaz.',
+                [
+                    { text: 'Şimdi Değil', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Devam Et', onPress: () => resolve(true) },
+                ],
+                { cancelable: false },
+            );
+        });
+        if (!accepted) return false;
+
+        await AsyncStorage.setItem(disclosureKey, 'accepted');
+        const permission = await Location.requestBackgroundPermissionsAsync();
+        return permission.status === 'granted';
+    }, [userInfo?.id]);
     const syncLocationTrackingByShift = useCallback(async () => {
         if (syncingRef.current) return;
 
@@ -125,8 +155,11 @@ export const AuthProvider = ({ children }) => {
 
             const isShiftRunning = await hasActiveShiftToday();
             if (isShiftRunning) {
-                await startBackgroundLocationTracking();
                 await sendCurrentLocationNow();
+                const hasBackgroundConsent = await requestBackgroundLocationConsent();
+                if (hasBackgroundConsent) {
+                    await startBackgroundLocationTracking({ hasDisclosureConsent: true });
+                }
             } else {
                 await stopBackgroundLocationTracking();
             }
@@ -138,7 +171,7 @@ export const AuthProvider = ({ children }) => {
         } finally {
             syncingRef.current = false;
         }
-    }, [canTrackLocationAsTechnician, hasActiveShiftToday, isLoggedIn]);
+    }, [canTrackLocationAsTechnician, hasActiveShiftToday, isLoggedIn, requestBackgroundLocationConsent]);
 
     const register = useCallback(async (
         email,
@@ -259,6 +292,13 @@ export const AuthProvider = ({ children }) => {
         }
     }, [applyAuthState]);
 
+    const deleteAccount = useCallback(async (password) => {
+        await stopBackgroundLocationTracking();
+        await authService.deleteAccount(password);
+        await clearStoredSession();
+        applyAuthState({ token: null, user: null, loggedIn: false });
+    }, [applyAuthState]);
+
     const checkAuth = useCallback(async ({ silent = false } = {}) => {
         if (!silent) {
             setIsLoading(true);
@@ -276,7 +316,7 @@ export const AuthProvider = ({ children }) => {
 
             if (!token) {
                 applyAuthState({ token: null, user: null, loggedIn: false });
-                return;
+                return { kind: 'logged-out' };
             }
 
             if (parsedStoredUser?.id) {
@@ -304,17 +344,29 @@ export const AuthProvider = ({ children }) => {
                         user: response.data,
                         loggedIn: true,
                     });
-                    return;
+                    return { kind: 'active' };
                 }
 
                 throw new Error('Invalid auth response');
             } catch (verifyError) {
                 const status = verifyError?.response?.status;
+                const accountStatus = verifyError?.response?.data?.account_status;
                 const isTimeout = verifyError?.message === 'AUTH_CHECK_TIMEOUT';
 
                 if (isTimeout && parsedStoredUser?.id) {
                     console.log('Auth verify timeout, using cached session fallback.');
-                    return;
+                    return { kind: 'cached' };
+                }
+
+                if (status === 403 && accountStatus && parsedStoredUser?.id) {
+                    const gatedUser = {
+                        ...parsedStoredUser,
+                        approval_status: accountStatus === 'pending' ? 'pending' : accountStatus === 'rejected' ? 'rejected' : parsedStoredUser.approval_status,
+                        is_active: accountStatus === 'deactivated' ? false : parsedStoredUser.is_active,
+                    };
+                    await AsyncStorage.setItem('user_info', JSON.stringify(gatedUser));
+                    applyAuthState({ token, user: gatedUser, loggedIn: true });
+                    return { kind: accountStatus };
                 }
 
                 if (status === 401 || status === 403 || !parsedStoredUser?.id) {
@@ -324,11 +376,13 @@ export const AuthProvider = ({ children }) => {
                     );
                     await clearStoredSession();
                     applyAuthState({ token: null, user: null, loggedIn: false });
+                    return { kind: 'logged-out' };
                 }
             }
         } catch (error) {
             console.error('Check auth error:', error);
             applyAuthState({ token: null, user: null, loggedIn: false });
+            return { kind: 'logged-out' };
         } finally {
             authHydratedRef.current = true;
             setIsLoading(false);
@@ -371,8 +425,6 @@ export const AuthProvider = ({ children }) => {
                     await api.post(ENDPOINTS.TECHNICIAN.STATUS, { is_online: isOnline });
                     if (isOnline) {
                         await syncLocationTrackingByShift();
-                    } else {
-                        await stopBackgroundLocationTracking();
                     }
                 } catch (error) {
                     console.log('Failed to update online status:', error);
@@ -410,6 +462,7 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        deleteAccount,
         checkAuth,
         completeOnboarding,
         syncLocationTrackingByShift,
@@ -424,6 +477,7 @@ export const AuthProvider = ({ children }) => {
         isTechnician,
         login,
         logout,
+        deleteAccount,
         mobilePermissions,
         register,
         shouldShowOnboarding,

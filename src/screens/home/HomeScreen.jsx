@@ -25,29 +25,17 @@ import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
-import Share from 'react-native-share';
-import Constants from 'expo-constants';
+import { getNativeShare } from '@/utils/nativeShare';
 import api from "@/api/axios";
 import ENDPOINTS from "@/api/endpoints";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 
-const executionEnvironment = String(Constants?.executionEnvironment || '').toLowerCase();
-const appOwnership = String(Constants?.appOwnership || '').toLowerCase();
-const useNativeShare = !(executionEnvironment === 'storeclient' || appOwnership === 'expo');
-
-let nativeShareLib = null;
-if (useNativeShare) {
-    try {
-        nativeShareLib = require('react-native-share').default || require('react-native-share');
-    } catch (e) {
-        nativeShareLib = null;
-    }
-}
 import buildShiftState from "@/utils/shiftSummary";
 import WrapperContainer, { NO_BOTTOM_EDGES } from '@/components/WrapperContainer';
 import HomeHeader from "@/components/home/HomeHeader";
 import CalendarPickerSheet from "@/components/home/CalendarPickerSheet";
 import AppBottomSheet from "@/components/AppBottomSheet";
+import RouteMapModal from "@/components/common/RouteMapModal";
 
 import { fs, sp, lh } from "@/theme/scale";
 import { spacing } from "@/theme/spacing";
@@ -80,6 +68,7 @@ export default function HomeScreen({ navigation }) {
     // Service Actions Sheet state
     const [selectedService, setSelectedService] = useState(null);
     const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+    const [routeService, setRouteService] = useState(null);
     const actionsSheetRef = useRef(null);
 
     // User details
@@ -311,14 +300,20 @@ export default function HomeScreen({ navigation }) {
             });
 
             if (result.status === 200) {
+                const nativeShare = getNativeShare();
+                if (!nativeShare) {
+                    showToast('warning', 'Dev Modu', 'WhatsApp PDF gonderimi bu development build icinde kapali.');
+                    return;
+                }
+
                 // Read downloaded PDF as base64 string
                 const pdfBase64 = await FileSystem.readAsStringAsync(result.uri, {
                     encoding: FileSystem.EncodingType.Base64,
                 });
 
                 // Share Single via WhatsApp using react-native-share with pdf attached
-                await Share.shareSingle({
-                    social: Share.Social.WHATSAPP,
+                await nativeShare.shareSingle({
+                    social: nativeShare.Social.WHATSAPP,
                     whatsAppNumber: temizNumara,
                     url: `data:application/pdf;base64,${pdfBase64}`,
                     type: "application/pdf",
@@ -378,7 +373,7 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
-            <View style={{ flex: 1, backgroundColor: isDark ? colors.background : '#F8FAFC' }}>
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
                 <HomeHeader
                     unreadCount={unreadCount || 0}
                     onNotificationsPress={() => navigation.navigate('Notifications')}
@@ -651,7 +646,7 @@ export default function HomeScreen({ navigation }) {
                                         </Pressable>
                                         <Pressable
                                             style={[styles.actionBtn, { borderColor: `${badge.dotColor}30` }]}
-                                            onPress={() => handleNavigateCustomer(item.customer_address)}
+                                            onPress={() => setRouteService(item)}
                                         >
                                             <MaterialCommunityIcons name="navigation-variant-outline" size={18} color={badge.dotColor} />
                                         </Pressable>
@@ -805,6 +800,13 @@ export default function HomeScreen({ navigation }) {
                         </View>
                     </View>
                 </AppBottomSheet>
+                <RouteMapModal
+                    visible={Boolean(routeService)}
+                    onClose={() => setRouteService(null)}
+                    address={routeService?.customer_address}
+                    customerName={routeService?.customer_full_name}
+                />
+
                 <AppBottomSheet
                     ref={actionsSheetRef}
                     visible={actionsSheetVisible}
@@ -933,7 +935,7 @@ export default function HomeScreen({ navigation }) {
                                 ]}
                                 onPress={() => {
                                     setActionsSheetVisible(false);
-                                    handleNavigateCustomer(selectedService?.customer_address);
+                                    setRouteService(selectedService);
                                 }}
                             >
                                 <View style={[styles.actionOptionIcon, { backgroundColor: '#EC48991A' }]}>

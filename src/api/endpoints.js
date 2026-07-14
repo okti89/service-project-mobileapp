@@ -2,6 +2,7 @@ const ENDPOINTS = {
     AUTH: {
         LOGIN: 'accounts/auth/login/',
         LOGOUT: 'accounts/auth/logout/',
+        DELETE_ACCOUNT: 'accounts/auth/delete-account/',
         REGISTER: 'accounts/auth/register/',
         CHECK_AUTH: 'accounts/auth/check/',
         ME: 'accounts/auth/me/',

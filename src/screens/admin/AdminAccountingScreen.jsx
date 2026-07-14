@@ -112,7 +112,7 @@ export default function AdminAccountingScreen({ navigation }) {
 
     // Sekme State
     const [mainTab, setMainTab] = useState('transactions'); // 'transactions' veya 'receivables'
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState('income');
     const [selectedAccount, setSelectedAccount] = useState(null);
 
     // Tarih/Dönem Filtreleri
@@ -611,10 +611,11 @@ export default function AdminAccountingScreen({ navigation }) {
                         {mainTab === 'transactions' ? (
                             <View style={[styles.tabContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
                                 <Pressable
-                                    onPress={() => setActiveTab('all')}
-                                    style={[styles.tabBtn, activeTab === 'all' && [styles.tabActiveBtn, { backgroundColor: serviceBlue }]]}
+                                    onPress={() => navigation.navigate('AdminAccountingForm', { onSuccess: fetchData })}
+                                    style={[styles.tabBtn, styles.newTransactionTab, { borderColor: serviceBlue }]}
                                 >
-                                    <Text style={[styles.tabBtnText, { color: activeTab === 'all' ? '#FFF' : colors.textSecondary }]}>Tümü</Text>
+                                    <Icon name="add-circle-outline" size={15} color={serviceBlue} />
+                                    <Text style={[styles.tabBtnText, { color: serviceBlue }]}>Yeni Finansal İşlem</Text>
                                 </Pressable>
                                 <Pressable
                                     onPress={() => setActiveTab('income')}
@@ -931,6 +932,7 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+    newTransactionTab: { flexDirection: 'row', justifyContent: 'center', gap: 3, borderWidth: 1 },
     tabActiveBtn: { elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1 },
     tabBtnText: { fontSize: 12, fontWeight: '700' },
 

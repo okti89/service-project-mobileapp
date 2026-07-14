@@ -64,6 +64,7 @@ const WrapperContainer = ({
     bottomOffset = 0,
     statusBarStyle,
     contentContainerStyle,
+    containerStyle,
     style,
     scrollProps,
 
@@ -141,7 +142,7 @@ const WrapperContainer = ({
     );
 
     return (
-        <View style={[styles.root, { backgroundColor }]}>
+        <View style={[styles.root, { backgroundColor }, containerStyle]}>
             <StatusBar barStyle={barStyle} backgroundColor={backgroundColor} />
             <SafeAreaView
                 edges={resolvedEdges}

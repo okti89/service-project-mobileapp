@@ -1,7 +1,9 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     Image,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -221,10 +223,38 @@ function MenuItem({ icon, label, description, onPress, color, badge, colors }) {
 export default function AdminPanelScreen({ navigation }) {
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useTheme();
-    const { isAdmin, mobilePermissions, userInfo } = useAuth();
+    const { checkAuth, isAdmin, mobilePermissions, userInfo } = useAuth();
     const { unreadCount = 0 } = useNotifications() || {};
     const [pendingCount, setPendingCount] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+    const viewModeStorageKey = `admin-panel-view-mode:${userInfo?.id || 'default'}`;
+
+    useEffect(() => {
+        let isMounted = true;
+        setViewMode('grid');
+
+        AsyncStorage.getItem(viewModeStorageKey)
+            .then((savedViewMode) => {
+                if (isMounted && (savedViewMode === 'grid' || savedViewMode === 'list')) {
+                    setViewMode(savedViewMode);
+                }
+            })
+            .catch(() => {
+                // A storage error should not prevent access to the management panel.
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [viewModeStorageKey]);
+
+    const handleViewModeChange = (nextViewMode) => {
+        setViewMode(nextViewMode);
+        AsyncStorage.setItem(viewModeStorageKey, nextViewMode).catch(() => {
+            // The selected view remains usable even if it cannot be persisted.
+        });
+    };
 
     // User display info
     const firstName = userInfo?.first_name || '';
@@ -254,6 +284,16 @@ export default function AdminPanelScreen({ navigation }) {
     }, [shouldFetchPendingCount]);
 
     useFocusEffect(useCallback(() => { fetchPendingCount(); }, [fetchPendingCount]));
+
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await checkAuth({ silent: true });
+            await fetchPendingCount();
+        } finally {
+            setRefreshing(false);
+        }
+    }, [checkAuth, fetchPendingCount]);
 
     const baseItems = useMemo(() => {
         if (isAdmin) return ADMIN_MENU_ITEMS;
@@ -289,6 +329,14 @@ export default function AdminPanelScreen({ navigation }) {
 
             <ScrollView
                 contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                        colors={[colors.primary]}
+                        tintColor={colors.primary}
+                    />
+                }
                 showsVerticalScrollIndicator={false}
             >
                 {/* ─── Profile Card ─── */}
@@ -325,10 +373,10 @@ export default function AdminPanelScreen({ navigation }) {
                 <View style={[styles.sectionHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }]}>
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>Yönetim Modülleri</Text>
                     <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#F1F5F9', borderRadius: 8, padding: 2 }}>
-                        <Pressable onPress={() => setViewMode('grid')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'grid' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
+                        <Pressable onPress={() => handleViewModeChange('grid')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'grid' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
                             <MaterialCommunityIcons name="view-grid-outline" size={20} color={viewMode === 'grid' ? colors.text : colors.textSecondary} />
                         </Pressable>
-                        <Pressable onPress={() => setViewMode('list')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'list' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
+                        <Pressable onPress={() => handleViewModeChange('list')} style={{ padding: 4, borderRadius: 6, backgroundColor: viewMode === 'list' ? (isDark ? '#334155' : '#FFFFFF') : 'transparent' }}>
                             <MaterialCommunityIcons name="view-list-outline" size={20} color={viewMode === 'list' ? colors.text : colors.textSecondary} />
                         </Pressable>
                     </View>

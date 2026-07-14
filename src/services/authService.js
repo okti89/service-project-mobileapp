@@ -80,6 +80,11 @@ const authService = {
         }
     },
 
+    deleteAccount: async (password) => {
+        const response = await api.delete(ENDPOINTS.AUTH.DELETE_ACCOUNT, { data: { password, confirmation: 'SİL' } });
+        return response.data;
+    },
+
     checkAuth: async () => {
         try {
             const response = await api.get(ENDPOINTS.AUTH.CHECK_AUTH);

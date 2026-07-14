@@ -7,10 +7,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from "@/context/AuthContext";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import HomeScreen from "@/screens/home/HomeScreen";
-import DevScreen from "@/screens/dev/DevScreen";
 import AdminPanelNavigator from "./AdminPanelNavigator";
 import ProfileScreen from "@/screens/profile/ProfileScreen";
 import ServicesScreen from "@/screens/services/ServicesScreen";
+import SettingsScreen from "@/screens/settings/SettingsScreen";
 const Tab = createBottomTabNavigator();
 
 const ICON_MAP = {
@@ -18,7 +18,7 @@ const ICON_MAP = {
     Services: { focused: 'view-list', unfocused: 'view-list' },
     Appointments: { focused: 'calendar', unfocused: 'calendar-outline' },
     Profile: { focused: 'account', unfocused: 'account-outline' },
-    Dev: { focused: 'flask', unfocused: 'flask-outline' },
+    Settings: { focused: 'cog', unfocused: 'cog-outline' },
     AdminPanel: { focused: 'account-cog', unfocused: 'account-cog-outline' },
 };
 function RegularTabIcon({ focused, color }) {
@@ -95,21 +95,8 @@ export default function BottomNavigation() {
                 }}
             />
             <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil', tabBarShowLabel: true }} />
-
-
-            {
-                __DEV__ ? (
-
-                    <Tab.Screen name="Dev"
-                        component={DevScreen}
-                        options={{
-                            title: 'Dev',
-                            tabBarShowLabel: true,
-                        }}
-                    />
-                ) : null
-            }
-        </Tab.Navigator>
+            <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Ayarlar', tabBarShowLabel: true }} />
+</Tab.Navigator>
 
     )
 }

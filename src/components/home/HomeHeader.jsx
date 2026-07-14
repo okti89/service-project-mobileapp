@@ -205,24 +205,6 @@ export default function HomeHeader({
                         ) : null}
                     </Pressable>
 
-                    <Pressable
-                        onPress={openLogoutSheet}
-                        style={({ pressed }) => [
-                            styles.iconButton,
-                            {
-                                backgroundColor: t.buttonBg,
-                                borderColor: t.buttonBorder,
-                                opacity: pressed ? 0.7 : 1,
-                            },
-                        ]}
-                        accessibilityLabel="Çıkış yap"
-                    >
-                        <MaterialCommunityIcons
-                            name="logout"
-                            size={20}
-                            color={t.icon}
-                        />
-                    </Pressable>
                 </View>
             </View>
 

@@ -593,7 +593,7 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
 
     if (loading) {
         return (
-            <View style={[styles.screen, { backgroundColor: isDark ? '#08111F' : '#F4F7FC' }]}>
+            <View style={[styles.screen, { backgroundColor: colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                     <Pressable
                         onPress={() => navigation.goBack()}
@@ -622,7 +622,7 @@ export default function TechnicianShiftsScreen({ navigation, route }) {
     }
 
     return (
-        <View style={[styles.screen, { backgroundColor: isDark ? '#08111F' : '#F4F7FC' }]}>
+        <View style={[styles.screen, { backgroundColor: colors.background }]}>
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                 <Pressable
                     onPress={() => navigation.goBack()}

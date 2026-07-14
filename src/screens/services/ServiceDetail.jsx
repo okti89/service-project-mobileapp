@@ -9,7 +9,6 @@ import {
     Text,
     View,
     Modal,
-    SafeAreaView,
     Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -28,6 +27,7 @@ import TechnicianPickerSheet from '@/components/TechnicianPickerSheet';
 import AppBottomSheet from '@/components/AppBottomSheet';
 import ServiceOperationSheet from '@/components/services/ServiceOperationSheet';
 import ServicePaymentSheet from '@/components/services/ServicePaymentSheet';
+import ServicePhotoSheet from '@/components/services/ServicePhotoSheet';
 import { fs, sp } from '@/theme/scale';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -37,11 +37,12 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import Share from 'react-native-share';
+import { getNativeShare } from '@/utils/nativeShare';
 import SignatureScreen from 'react-native-signature-canvas';
 import { getMapProvider } from '@/config/maps';
 import serviceService from '@/services/serviceService';
 import productService from '@/services/productService';
+import { resolveMediaUrl } from '@/utils/mediaUrl';
 
 dayjs.locale('tr');
 
@@ -57,11 +58,11 @@ const FALLBACK_SERVICE_STATUS_OPTIONS = [
 ];
 
 const TABS = [
-    { key: 'genel', label: 'Genel' },
-    { key: 'islemler', label: 'İşlemler' },
-    { key: 'odeme', label: 'Ödeme' },
-    { key: 'imza', label: 'İmza' },
-    { key: 'zaman', label: 'Zaman' },
+    { key: 'genel', label: 'Genel', icon: 'view-grid-outline' },
+    { key: 'islemler', label: 'İşlemler', icon: 'tools' },
+    { key: 'odeme', label: 'Ödeme', icon: 'wallet-outline' },
+    { key: 'imza', label: 'İmza', icon: 'draw-pen' },
+    { key: 'zaman', label: 'Zaman', icon: 'history' },
 ];
 
 const formatCurrency = (val) => {
@@ -90,6 +91,7 @@ export default function ServiceDetail({ route, navigation }) {
     const [operationTemplates, setOperationTemplates] = useState([]);
     const [showOperationSheet, setShowOperationSheet] = useState(false);
     const [showPaymentSheet, setShowPaymentSheet] = useState(false);
+    const [showPhotoSheet, setShowPhotoSheet] = useState(false);
     const [editingOperation, setEditingOperation] = useState(null);
     const [editingPayment, setEditingPayment] = useState(null);
     const [products, setProducts] = useState([]);
@@ -242,8 +244,13 @@ export default function ServiceDetail({ route, navigation }) {
     }, []);
 
     const ensureWhatsAppReady = useCallback(async () => {
+        const nativeShare = getNativeShare();
+        if (!nativeShare) {
+            showToast('warning', 'Dev Modu', 'WhatsApp paylasimi bu development build icinde kapali.');
+            return false;
+        }
         if (Platform.OS !== 'android') return true;
-        const { isInstalled } = await Share.isPackageInstalled('com.whatsapp');
+        const { isInstalled } = await nativeShare.isPackageInstalled('com.whatsapp');
         if (!isInstalled) {
             showToast('error', 'Hata', 'WhatsApp yüklü değil.');
             return false;
@@ -252,12 +259,16 @@ export default function ServiceDetail({ route, navigation }) {
     }, [showToast]);
 
     const sharePdfToWhatsApp = useCallback(async ({ fileUri, filename, phone, message }) => {
+        const nativeShare = getNativeShare();
+        if (!nativeShare) {
+            throw new Error('Native share module is unavailable in this development build.');
+        }
         const fileBase64 = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
         });
 
-        await Share.shareSingle({
-            social: Share.Social.WHATSAPP,
+        await nativeShare.shareSingle({
+            social: nativeShare.Social.WHATSAPP,
             whatsAppNumber: phone,
             url: `data:application/pdf;base64,${fileBase64}`,
             type: 'application/pdf',
@@ -268,7 +279,20 @@ export default function ServiceDetail({ route, navigation }) {
     }, []);
 
     const shareLocalPdf = useCallback(async ({ fileUri, filename, message }) => {
-        await Share.open({
+        const nativeShare = getNativeShare();
+        if (!nativeShare) {
+            const available = await Sharing.isAvailableAsync();
+            if (!available) {
+                throw new Error('PDF paylasimi bu development build icinde kullanilamiyor.');
+            }
+            await Sharing.shareAsync(fileUri, {
+                mimeType: 'application/pdf',
+                dialogTitle: message || filename,
+                UTI: 'com.adobe.pdf',
+            });
+            return;
+        }
+        await nativeShare.open({
             url: fileUri,
             type: 'application/pdf',
             filename,
@@ -466,7 +490,7 @@ export default function ServiceDetail({ route, navigation }) {
 
         const phone = normalizeWhatsAppPhone(service?.customer_phone);
         if (!phone) {
-            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
             return;
         }
 
@@ -474,18 +498,18 @@ export default function ServiceDetail({ route, navigation }) {
             const isReady = await ensureWhatsAppReady();
             if (!isReady) return;
 
-            showToast('info', 'PDF', 'Servis formu WhatsApp i\u00e7in haz\u0131rlan\u0131yor...');
+            showToast('info', 'PDF', 'Servis formu WhatsApp için hazırlanıyor...');
             const { uri, filename } = await downloadServiceFormPdfFile();
             await sharePdfToWhatsApp({
                 fileUri: uri,
                 filename,
                 phone,
-                message: (service?.customer_full_name ? `${service.customer_full_name} ` : '') + 'i\u00e7in servis formu ekte yer almaktad\u0131r.',
+                message: (service?.customer_full_name ? `${service.customer_full_name} ` : '') + 'için servis formu ekte yer almaktadır.',
             });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Service form WhatsApp share error:', err);
-                showToast('error', 'Hata', 'Servis formu WhatsApp ile g\u00f6nderilemedi.');
+                showToast('error', 'Hata', 'Servis formu WhatsApp ile gönderilemedi.');
             }
         }
     }, [service, isAdmin, normalizeWhatsAppPhone, showToast, ensureWhatsAppReady, sharePdfToWhatsApp, downloadServiceFormPdfFile]);
@@ -495,17 +519,17 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Servis Formu', 'Servis formu haz\u0131rlan\u0131yor...');
+            showToast('info', 'Servis Formu', 'Servis formu hazırlanıyor...');
             const { uri, filename } = await downloadServiceFormPdfFile();
             await shareLocalPdf({
                 fileUri: uri,
                 filename,
-                message: 'Servis formu ekte yer almaktad\u0131r.',
+                message: 'Servis formu ekte yer almaktadır.',
             });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Service form share error:', err);
-                showToast('error', 'Hata', 'Servis formu payla\u015f\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Servis formu paylaşılamadı.');
             }
         }
     }, [service, isAdmin, showToast, shareLocalPdf, downloadServiceFormPdfFile]);
@@ -515,7 +539,7 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Servis Formu', 'Servis formu a\u00e7\u0131l\u0131yor...');
+            showToast('info', 'Servis Formu', 'Servis formu açılıyor...');
             const { uri } = await downloadServiceFormPdfFile();
             await openLocalPdf({
                 fileUri: uri,
@@ -524,7 +548,7 @@ export default function ServiceDetail({ route, navigation }) {
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Service form open error:', err);
-                showToast('error', 'Hata', 'Servis formu a\u00e7\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Servis formu açılamadı.');
             }
         }
     }, [service, isAdmin, showToast, openLocalPdf, downloadServiceFormPdfFile]);
@@ -534,13 +558,13 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Servis Formu', 'Servis formu yazd\u0131rmaya haz\u0131rlan\u0131yor...');
+            showToast('info', 'Servis Formu', 'Servis formu yazdırmaya hazırlanıyor...');
             const { uri } = await downloadServiceFormPdfFile();
             await printLocalPdf({ fileUri: uri });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Service form print error:', err);
-                showToast('error', 'Hata', 'Servis formu yazd\u0131r\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Servis formu yazdırılamadı.');
             }
         }
     }, [service, isAdmin, showToast, printLocalPdf, downloadServiceFormPdfFile]);
@@ -550,7 +574,7 @@ export default function ServiceDetail({ route, navigation }) {
 
         const phone = normalizeWhatsAppPhone(service?.customer_phone);
         if (!phone) {
-            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
             return;
         }
 
@@ -559,18 +583,18 @@ export default function ServiceDetail({ route, navigation }) {
             if (!isReady) return;
 
             setShowDocumentSheet(false);
-            showToast('info', 'Garanti', 'Garanti belgesi WhatsApp i\u00e7in haz\u0131rlan\u0131yor...');
+            showToast('info', 'Garanti', 'Garanti belgesi WhatsApp için hazırlanıyor...');
             const { uri, filename } = await downloadWarrantyPdfFile();
             await sharePdfToWhatsApp({
                 fileUri: uri,
                 filename,
                 phone,
-                message: (service?.customer_full_name || '') + (service?.customer_full_name ? ' ' : '') + 'i\u00e7in garanti belgesi ekte yer almaktad\u0131r.',
+                message: (service?.customer_full_name || '') + (service?.customer_full_name ? ' ' : '') + 'için garanti belgesi ekte yer almaktadır.',
             });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Warranty certificate WhatsApp share error:', err);
-                showToast('error', 'Hata', 'Garanti belgesi WhatsApp ile g\u00f6nderilemedi.');
+                showToast('error', 'Hata', 'Garanti belgesi WhatsApp ile gönderilemedi.');
             }
         }
     }, [service, isAdmin, normalizeWhatsAppPhone, showToast, ensureWhatsAppReady, sharePdfToWhatsApp, downloadWarrantyPdfFile]);
@@ -580,17 +604,17 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Garanti', 'Garanti belgesi haz\u0131rlan\u0131yor...');
+            showToast('info', 'Garanti', 'Garanti belgesi hazırlanıyor...');
             const { uri, filename } = await downloadWarrantyPdfFile();
             await shareLocalPdf({
                 fileUri: uri,
                 filename,
-                message: 'Garanti belgesi ekte yer almaktad\u0131r.',
+                message: 'Garanti belgesi ekte yer almaktadır.',
             });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Warranty certificate share error:', err);
-                showToast('error', 'Hata', 'Garanti belgesi payla\u015f\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Garanti belgesi paylaşılamadı.');
             }
         }
     }, [service, isAdmin, showToast, shareLocalPdf, downloadWarrantyPdfFile]);
@@ -600,7 +624,7 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Garanti', 'Garanti belgesi a\u00e7\u0131l\u0131yor...');
+            showToast('info', 'Garanti', 'Garanti belgesi açılıyor...');
             const { uri } = await downloadWarrantyPdfFile();
             await openLocalPdf({
                 fileUri: uri,
@@ -609,7 +633,7 @@ export default function ServiceDetail({ route, navigation }) {
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Warranty certificate open error:', err);
-                showToast('error', 'Hata', 'Garanti belgesi a\u00e7\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Garanti belgesi açılamadı.');
             }
         }
     }, [service, isAdmin, showToast, openLocalPdf, downloadWarrantyPdfFile]);
@@ -619,13 +643,13 @@ export default function ServiceDetail({ route, navigation }) {
 
         try {
             setShowDocumentSheet(false);
-            showToast('info', 'Garanti', 'Garanti belgesi yazd\u0131rmaya haz\u0131rlan\u0131yor...');
+            showToast('info', 'Garanti', 'Garanti belgesi yazdırmaya hazırlanıyor...');
             const { uri } = await downloadWarrantyPdfFile();
             await printLocalPdf({ fileUri: uri });
         } catch (err) {
             if (err?.message && !String(err.message).toLowerCase().includes('cancel')) {
                 console.log('Warranty certificate print error:', err);
-                showToast('error', 'Hata', 'Garanti belgesi yazd\u0131r\u0131lamad\u0131.');
+                showToast('error', 'Hata', 'Garanti belgesi yazdırılamadı.');
             }
         }
     }, [service, isAdmin, showToast, printLocalPdf, downloadWarrantyPdfFile]);
@@ -695,7 +719,7 @@ export default function ServiceDetail({ route, navigation }) {
             service: service.id,
             amount: remainingBalance,
             payment_method: defaultMethod.id,
-            note: '\u0048\u0131zl\u0131 tahsilat',
+            note: 'Hızlı tahsilat',
         });
         showToast('success', 'Ödeme', 'Kalan tutarın tamamı tahsil edildi.');
         await fetchService();
@@ -722,6 +746,21 @@ export default function ServiceDetail({ route, navigation }) {
     }, []);
 
     // ── Yüklenme / Hata durumları ──────────────────────────────────────────────
+
+    const handlePhotoCreate = useCallback(async (payload) => {
+        await serviceService.createServicePhoto(payload);
+        await fetchService();
+    }, [fetchService]);
+
+    const handlePhotoUpdate = useCallback(async (photoId, payload) => {
+        await serviceService.updateServicePhoto(photoId, payload);
+        await fetchService();
+    }, [fetchService]);
+
+    const handlePhotoDelete = useCallback(async (photoId) => {
+        await serviceService.deleteServicePhoto(photoId);
+        await fetchService();
+    }, [fetchService]);
 
     if (loading) {
         return (
@@ -752,6 +791,7 @@ export default function ServiceDetail({ route, navigation }) {
     const deviceDesc = [service.device_type_name, service.device_brand_name, service.device_model_name].filter(Boolean).join(' • ');
     const items = Array.isArray(service.items) ? service.items : [];
     const payments = Array.isArray(service.payments) ? service.payments : [];
+    const photos = Array.isArray(service.photos) ? service.photos : [];
     const timeline = Array.isArray(service.timeline) ? service.timeline : [];
     const bg = isDark ? colors.background : '#F8FAFC';
 
@@ -820,8 +860,9 @@ export default function ServiceDetail({ route, navigation }) {
                         <ActionBtn icon="whatsapp" color="#25D366" label="WhatsApp" onPress={handleWhatsApp} colors={colors} />
                         <ActionBtn icon="phone-outline" color="#3B82F6" label="Ara" onPress={handleCall} colors={colors} />
                         <ActionBtn icon="navigation-variant-outline" color="#8B5CF6" label="Harita" onPress={handleMap} colors={colors} />
-                        <ActionBtn icon="wrench-outline" color="#2563EB" label={'\u0130\u015flem'} onPress={openCreateOperationSheet} colors={colors} />
-                        <ActionBtn icon="cash-plus" color="#16A34A" label={'\u00d6deme'} onPress={openCreatePaymentSheet} colors={colors} />
+                        <ActionBtn icon="wrench-outline" color="#2563EB" label={'İşlem'} onPress={openCreateOperationSheet} colors={colors} />
+                        <ActionBtn icon="cash-plus" color="#16A34A" label={'Ödeme'} onPress={openCreatePaymentSheet} colors={colors} />
+                        <ActionBtn icon="camera-plus-outline" color="#7C3AED" label="Fotoğraf" onPress={() => setShowPhotoSheet(true)} colors={colors} />
                         {isAdmin && (
                             <>
                                 <ActionBtn icon="file-pdf-box" color="#EF4444" label="PDF" onPress={handlePdf} colors={colors} />
@@ -832,21 +873,19 @@ export default function ServiceDetail({ route, navigation }) {
                     </View>
 
                     {/* ── Tab Bar ── */}
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll} style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-                        {TABS.map(tab => (
-                            <Pressable key={tab.key} onPress={() => setActiveTab(tab.key)} style={styles.tabItem}>
-                                <Text style={[styles.tabLabel, {
-                                    color: activeTab === tab.key ? '#2563EB' : colors.textSecondary,
-                                    fontWeight: activeTab === tab.key ? '800' : '500',
-                                }]}>{tab.label}</Text>
-                                {activeTab === tab.key && <View style={styles.tabUnderline} />}
-                            </Pressable>
-                        ))}
-                    </ScrollView>
+                    <View style={[styles.tabBar, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border }]}>
+                        {TABS.map(tab => {
+                            const isActive = activeTab === tab.key;
+                            return <Pressable key={tab.key} onPress={() => setActiveTab(tab.key)} style={({ pressed }) => [styles.tabItem, isActive && styles.tabItemActive, { opacity: pressed ? 0.72 : 1 }]}>
+                                <MaterialCommunityIcons name={tab.icon} size={18} color={isActive ? '#2563EB' : colors.textSecondary} />
+                                <Text style={[styles.tabLabel, { color: isActive ? '#2563EB' : colors.textSecondary }]} numberOfLines={1}>{tab.label}</Text>
+                            </Pressable>;
+                        })}
+                    </View>
 
                     {/* ── Tab İçerikleri ── */}
                     <View style={styles.tabContent}>
-                        {activeTab === 'genel' && <GenelTab service={service} items={items} colors={colors} isDark={isDark} onCall={handleCall} onMap={handleMap} />}
+                        {activeTab === 'genel' && <GenelTab service={service} items={items} photos={photos} colors={colors} isDark={isDark} onCall={handleCall} onMap={handleMap} onOpenPhotos={() => setShowPhotoSheet(true)} />}
                         {activeTab === 'islemler' && <IslemlerTab items={items} colors={colors} isDark={isDark} onAdd={openCreateOperationSheet} onEdit={openEditOperationSheet} />}
                         {activeTab === 'odeme' && <OdemeTab service={service} payments={payments} colors={colors} isDark={isDark} onAdd={openCreatePaymentSheet} onEdit={openEditPaymentSheet} onCollectRemaining={handleCollectRemainingPayment} />}
                         {activeTab === 'imza' && <ImzaTab service={service} fetchService={fetchService} signatureData={service?.signatures?.[0]} colors={colors} isDark={isDark} />}
@@ -879,6 +918,16 @@ export default function ServiceDetail({ route, navigation }) {
                 payment={editingPayment}
                 onSubmit={handlePaymentSubmit}
                 onDelete={handlePaymentDelete}
+            />
+
+            <ServicePhotoSheet
+                visible={showPhotoSheet}
+                onClose={() => setShowPhotoSheet(false)}
+                service={service}
+                photos={photos}
+                onCreate={handlePhotoCreate}
+                onUpdate={handlePhotoUpdate}
+                onDelete={handlePhotoDelete}
             />
 
             <StatusPickerSheet
@@ -998,8 +1047,8 @@ export default function ServiceDetail({ route, navigation }) {
                         <Text style={[styles.documentSectionTitle, { color: colors.textSecondary }]}>{'Garanti Belgesi'}</Text>
 
                         <View style={styles.warrantyMonthCard}>
-                            <Text style={[styles.warrantyMonthTitle, { color: colors.text }]}>{'Garanti S\u00fcresi'}</Text>
-                            <Text style={[styles.warrantyMonthSubtitle, { color: colors.textSecondary }]}>{'Belge olu\u015fturmadan \u00f6nce ay se\u00e7in.'}</Text>
+                            <Text style={[styles.warrantyMonthTitle, { color: colors.text }]}>{'Garanti Süresi'}</Text>
+                            <Text style={[styles.warrantyMonthSubtitle, { color: colors.textSecondary }]}>{'Belge oluşturmadan önce ay seçin.'}</Text>
                             <View style={styles.warrantyMonthRow}>
                                 {WARRANTY_MONTH_OPTIONS.map((month) => {
                                     const selected = selectedWarrantyMonths === month;
@@ -1058,8 +1107,8 @@ export default function ServiceDetail({ route, navigation }) {
                                 <MaterialCommunityIcons name="printer-outline" size={20} color="#D97706" />
                             </View>
                             <View style={styles.documentOptionBody}>
-                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi yazd\u0131r'}</Text>
-                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyas\u0131n\u0131 yazd\u0131rma ekran\u0131nda a\u00e7.'}</Text>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi yazdır'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını yazdırma ekranında aç.'}</Text>
                             </View>
                             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                         </Pressable>
@@ -1075,8 +1124,8 @@ export default function ServiceDetail({ route, navigation }) {
                                 <MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" />
                             </View>
                             <View style={styles.documentOptionBody}>
-                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi g\u00f6ster'}</Text>
-                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyas\u0131n\u0131 cihazda g\u00f6r\u00fcnt\u00fcle.'}</Text>
+                                <Text style={[styles.documentOptionTitle, { color: colors.text }]}>{'Garanti belgesi göster'}</Text>
+                                <Text style={[styles.documentOptionText, { color: colors.textSecondary }]}>{'PDF dosyasını cihazda görüntüle.'}</Text>
                             </View>
                             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                         </Pressable>
@@ -1229,7 +1278,7 @@ const Card = ({ title, icon, children, colors, isDark, rightAction }) => (
 
 // ─── GENEL TAB ─────────────────────────────────────────────────────────────────
 
-const GenelTab = ({ service, items, colors, isDark, onCall, onMap }) => {
+const GenelTab = ({ service, items, photos, colors, isDark, onCall, onMap, onOpenPhotos }) => {
     const totalPrice = parseFloat(service.total_price) || 0;
     const totalPaid = parseFloat(service.total_paid) || 0;
     const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
@@ -1237,6 +1286,11 @@ const GenelTab = ({ service, items, colors, isDark, onCall, onMap }) => {
 
     return (
         <View style={styles.tabSection}>
+            <Card title="Servis Özeti" icon="clipboard-text-outline" colors={colors} isDark={isDark}>
+                <InfoRow label="Durum" value={service.service_status_name || service.service_status} colors={colors} />
+                <InfoRow label="Planlanan" value={service.scheduled_date ? dayjs(service.scheduled_date).format('DD MMMM YYYY HH:mm') : null} colors={colors} />
+                <InfoRow label="Teknisyen" value={service.technician_name} colors={colors} />
+            </Card>
             {/* Arıza Açıklaması */}
             {service.fault_description ? (
                 <Card title="Arıza Açıklaması" icon="alert-circle-outline" colors={colors} isDark={isDark}>
@@ -1274,6 +1328,35 @@ const GenelTab = ({ service, items, colors, isDark, onCall, onMap }) => {
                 ) : null}
             </View>
 
+            <Card
+                title="Servis Fotoğrafları"
+                icon="image-multiple-outline"
+                colors={colors}
+                isDark={isDark}
+                rightAction={
+                    <Pressable onPress={onOpenPhotos} style={({ pressed }) => [styles.photoGalleryLink, { opacity: pressed ? 0.7 : 1 }]}>
+                        <Text style={styles.photoGalleryLinkText}>{photos.length ? `Tümü (${photos.length})` : 'Ekle'}</Text>
+                        <MaterialCommunityIcons name={photos.length ? 'arrow-right' : 'plus'} size={15} color="#7C3AED" />
+                    </Pressable>
+                }
+            >
+                {photos.length === 0 ? (
+                    <Pressable onPress={onOpenPhotos} style={({ pressed }) => [styles.photoEmptyPreview, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8FAFC', opacity: pressed ? 0.75 : 1 }]}>
+                        <MaterialCommunityIcons name="camera-plus-outline" size={20} color="#7C3AED" />
+                        <Text style={[styles.photoEmptyText, { color: colors.textSecondary }]}>Servis fotoğrafı ekleyin</Text>
+                    </Pressable>
+                ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoPreviewRow}>
+                        {photos.slice(0, 5).map((photo, index) => (
+                            <Pressable key={String(photo.id)} onPress={onOpenPhotos} style={({ pressed }) => [styles.photoPreviewItem, { opacity: pressed ? 0.8 : 1 }]}>
+                                <Image source={{ uri: resolveMediaUrl(photo.image) }} style={styles.photoPreviewImage} />
+                                {index === 4 && photos.length > 5 ? <View style={styles.photoMoreOverlay}><Text style={styles.photoMoreText}>+{photos.length - 5}</Text></View> : null}
+                            </Pressable>
+                        ))}
+                    </ScrollView>
+                )}
+            </Card>
+
             {/* Müşteri Bilgileri */}
             <Card title="Müşteri Bilgileri" icon="account-outline" colors={colors} isDark={isDark}>
                 <InfoRow label="Ad Soyad" value={service.customer_full_name} colors={colors} />
@@ -1303,8 +1386,16 @@ const GenelTab = ({ service, items, colors, isDark, onCall, onMap }) => {
 
 // ─── İŞLEMLER TAB ─────────────────────────────────────────────────────────────
 
-const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => (
+const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => {
+    const operationsTotal = items.reduce((total, item) => total + (Number(item.total_price ?? item.price ?? 0) || 0), 0);
+    return (
+
     <View style={styles.tabSection}>
+            <View style={[styles.tabSummaryCard, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border }]}>
+                <View style={styles.tabSummaryIcon}><MaterialCommunityIcons name="tools" size={20} color="#2563EB" /></View>
+                <View style={styles.tabSummaryBody}><Text style={[styles.tabSummaryEyebrow, { color: colors.textSecondary }]}>YAPILAN İŞLEMLER</Text><Text style={[styles.tabSummaryValue, { color: colors.text }]}>{items.length} kayıt</Text></View>
+                <Text style={[styles.tabSummaryAmount, { color: colors.text }]}>{formatCurrency(operationsTotal)}</Text>
+            </View>
         <Card
             title={'Yapılan İşlemler'}
             icon="tools"
@@ -1319,12 +1410,12 @@ const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => (
                     ]}
                 >
                     <MaterialCommunityIcons name="plus" size={16} color="#2563EB" />
-                    <Text style={styles.inlineHeaderActionText}>{'\u0130\u015flem Ekle'}</Text>
+                    <Text style={styles.inlineHeaderActionText}>{'İşlem Ekle'}</Text>
                 </Pressable>
             }
         >
             {items.length === 0 ? (
-                <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Hen\u00fcz i\u015flem eklenmemi\u015f.'}</Text>
+                <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Henüz işlem eklenmemiş.'}</Text>
             ) : items.map((item, i) => (
                 <View key={String(item.id || i)} style={[styles.itemRow, { borderBottomColor: colors.border }, i === items.length - 1 && { borderBottomWidth: 0 }]}>
                     <View style={styles.itemRowLeft}>
@@ -1346,17 +1437,25 @@ const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => (
             ))}
         </Card>
     </View>
-);
+    );
+};
 
 const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectRemaining }) => {
     const totalPrice = parseFloat(service.total_price) || 0;
     const totalPaid = parseFloat(service.total_paid) || 0;
     const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
+    const paymentProgress = totalPrice > 0 ? Math.min(Math.max((totalPaid / totalPrice) * 100, 0), 100) : 0;
 
     return (
         <View style={styles.tabSection}>
+            <View style={[styles.paymentProgressCard, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border }]}>
+                <View style={styles.paymentProgressHeader}><View><Text style={[styles.tabSummaryEyebrow, { color: colors.textSecondary }]}>TAHSİLAT DURUMU</Text><Text style={[styles.paymentProgressTitle, { color: colors.text }]}>{remaining > 0 ? 'Kalan ödeme var' : 'Ödeme tamamlandı'}</Text></View><Text style={[styles.paymentProgressPercent, { color: remaining > 0 ? '#D97706' : '#16A34A' }]}>%{Math.round(paymentProgress)}</Text></View>
+                <View style={[styles.progressTrack, { backgroundColor: isDark ? colors.background : '#E2E8F0' }]}><View style={[styles.progressFill, { width: paymentProgress + '%', backgroundColor: remaining > 0 ? '#F59E0B' : '#16A34A' }]} /></View>
+                <Text style={[styles.paymentProgressCaption, { color: colors.textSecondary }]}>{formatCurrency(totalPaid)} tahsil edildi</Text>
+            </View>
+
             <Card
-                title={'\u00d6deme \u00d6zeti'}
+                title={'Ödeme Özeti'}
                 icon="cash-multiple"
                 colors={colors}
                 isDark={isDark}
@@ -1370,7 +1469,7 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                             ]}
                         >
                             <MaterialCommunityIcons name="lightning-bolt" size={16} color="#16A34A" />
-                            <Text style={[styles.inlineHeaderActionText, { color: '#15803D' }]}>{'Tamam\u0131n\u0131 Al'}</Text>
+                            <Text style={[styles.inlineHeaderActionText, { color: '#15803D' }]}>{'Tamamını Al'}</Text>
                         </Pressable>
                         <Pressable
                             onPress={onAdd}
@@ -1380,7 +1479,7 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                             ]}
                         >
                             <MaterialCommunityIcons name="plus" size={16} color="#2563EB" />
-                            <Text style={styles.inlineHeaderActionText}>{'\u00d6deme Ekle'}</Text>
+                            <Text style={styles.inlineHeaderActionText}>{'Ödeme Ekle'}</Text>
                         </Pressable>
                     </View>
                 }
@@ -1390,7 +1489,7 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                     <Text style={[styles.payValue, { color: colors.text }]}>{formatCurrency(totalPrice)}</Text>
                 </View>
                 <View style={styles.payRow}>
-                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>{'\u00d6denen'}</Text>
+                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>{'Ödenen'}</Text>
                     <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(totalPaid)}</Text>
                 </View>
                 <View style={[styles.payRow, styles.payRowLast, { borderTopColor: colors.border }]}>
@@ -1399,7 +1498,7 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                 </View>
             </Card>
 
-            <Card title={'\u00d6deme Ge\u00e7mi\u015fi'} icon="history" colors={colors} isDark={isDark}>
+            <Card title={'Ödeme Geçmişi'} icon="history" colors={colors} isDark={isDark}>
                 {payments.length > 0 ? payments.map((p, i) => (
                     <View key={String(p.id || i)} style={[styles.payHistoryRow, { borderBottomColor: colors.border }, i === payments.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={styles.payHistoryInfo}>
@@ -1415,7 +1514,7 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                         </View>
                     </View>
                 )) : (
-                    <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Hen\u00fcz \u00f6deme eklenmemi\u015f.'}</Text>
+                    <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>{'Henüz ödeme eklenmemiş.'}</Text>
                 )}
             </Card>
         </View>
@@ -1433,7 +1532,7 @@ const TIMELINE_COLORS = {
 
 const ZamanTab = ({ timeline, colors, isDark }) => (
     <View style={styles.tabSection}>
-        <Card title="Zaman Çizelgesi" icon="timeline-outline" colors={colors} isDark={isDark}>
+        <Card title="Zaman Çizelgesi" icon="timeline-outline" colors={colors} isDark={isDark} rightAction={<Text style={[styles.cardCount, { color: colors.textSecondary }]}>{timeline.length} kayıt</Text>}>
             {timeline.length === 0 ? (
                 <Text style={[styles.emptyTabText, { color: colors.textSecondary }]}>Henüz kayıt yok.</Text>
             ) : timeline.map((event, i) => {
@@ -1523,6 +1622,10 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
     return (
         <View style={styles.tabSection}>
             <Card title="İmzalar" icon="draw" colors={colors} isDark={isDark}>
+                <View style={styles.signatureStatusRow}>
+                    <View style={[styles.signatureStatus, { backgroundColor: teknisyenImza ? '#DCFCE7' : '#FEF3C7' }]}><MaterialCommunityIcons name={teknisyenImza ? 'check-circle' : 'clock-outline'} size={15} color={teknisyenImza ? '#16A34A' : '#D97706'} /><Text style={[styles.signatureStatusText, { color: teknisyenImza ? '#15803D' : '#B45309' }]}>Teknisyen {teknisyenImza ? 'imzaladı' : 'bekliyor'}</Text></View>
+                    <View style={[styles.signatureStatus, { backgroundColor: musteriImza ? '#DCFCE7' : '#FEF3C7' }]}><MaterialCommunityIcons name={musteriImza ? 'check-circle' : 'clock-outline'} size={15} color={musteriImza ? '#16A34A' : '#D97706'} /><Text style={[styles.signatureStatusText, { color: musteriImza ? '#15803D' : '#B45309' }]}>Müşteri {musteriImza ? 'imzaladı' : 'bekliyor'}</Text></View>
+                </View>
                 <Text style={[styles.infoLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Teknisyen İmzası</Text>
                 <Pressable
                     style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#fafafa' }]}
@@ -1548,47 +1651,68 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
                 </Pressable>
             </Card>
 
-            <Modal
+                        <Modal
                 visible={aktifImzalayan !== null}
                 animationType="slide"
+                transparent
+                statusBarTranslucent
                 onShow={() => setModalHazir(true)}
                 onRequestClose={modalKapat}
             >
-                <View style={[styles.modalSafe, { backgroundColor: isDark ? colors.surface : '#fff' }]}>
-                    <Text style={[styles.modalBaslik, { color: colors.text }]}>
-                        {aktifImzalayan === "teknisyen" ? "Teknisyen İmzası" : "Müşteri İmzası"}
-                    </Text>
-                    <Text style={[styles.modalAciklama, { color: colors.textSecondary }]}>
-                        Lütfen aşağıdaki alana parmağınızla imzanızı atın.
-                    </Text>
+                <View style={styles.imzaModalOverlay}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={modalKapat} />
+                    <WrapperContainer
+                        bg={isDark ? colors.surface : '#fff'}
+                        edges={['left', 'right', 'bottom']}
+                        containerStyle={styles.modalSafe}
+                        style={styles.modalContent}
+                    >
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalHeaderText}>
+                                <Text style={[styles.modalBaslik, { color: colors.text }]}>
+                                    {aktifImzalayan === "teknisyen" ? "Teknisyen İmzası" : "Müşteri İmzası"}
+                                </Text>
+                                <Text style={[styles.modalAciklama, { color: colors.textSecondary }]}>
+                                    Lütfen aşağıdaki alana parmağınızla imzanızı atın.
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={modalKapat}
+                                style={[styles.modalCloseButton, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#F8FAFC' }]}
+                                hitSlop={8}
+                            >
+                                <MaterialCommunityIcons name="close" size={20} color={colors.text} />
+                            </Pressable>
+                        </View>
 
-                    <View style={[styles.modalCanvasKutu, { borderColor: colors.border }]}>
-                        {modalHazir && (
-                            <SignatureScreen
-                                key={acilmaSayaci}
-                                ref={modalRef}
-                                onOK={handleImzaSonucu}
-                                onEmpty={() => showToast('warning', 'Uyarı', 'İmza boş, tekrar deneyin.')}
-                                webStyle={imzaWebStyle}
-                                autoClear={false}
-                                descriptionText=""
-                                penColor="#000000"
-                                backgroundColor="#ffffff"
-                            />
-                        )}
-                    </View>
+                        <View style={[styles.modalCanvasKutu, { borderColor: colors.border }]}>
+                            {modalHazir && (
+                                <SignatureScreen
+                                    key={acilmaSayaci}
+                                    ref={modalRef}
+                                    onOK={handleImzaSonucu}
+                                    onEmpty={() => showToast('warning', 'Uyarı', 'İmza boş, tekrar deneyin.')}
+                                    webStyle={imzaWebStyle}
+                                    autoClear={false}
+                                    descriptionText=""
+                                    penColor="#000000"
+                                    backgroundColor="#ffffff"
+                                />
+                            )}
+                        </View>
 
-                    <View style={styles.modalButonSatiri}>
-                        <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#f1f1f1' }]} onPress={() => modalRef.current?.clearSignature()}>
-                            <Text style={[styles.imzaBtnText, { color: colors.text }]}>Temizle</Text>
-                        </Pressable>
-                        <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#f1f1f1' }]} onPress={modalKapat}>
-                            <Text style={[styles.imzaBtnText, { color: colors.text }]}>Vazgeç</Text>
-                        </Pressable>
-                        <Pressable style={[styles.imzaBtn, { backgroundColor: '#2563eb', flex: 1.4 }]} onPress={() => modalRef.current?.readSignature()} disabled={isSaving}>
-                            {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.imzaBtnText, { color: '#fff' }]}>Onayla</Text>}
-                        </Pressable>
-                    </View>
+                        <View style={styles.modalButonSatiri}>
+                            <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#F1F5F9' }]} onPress={() => modalRef.current?.clearSignature()}>
+                                <Text style={[styles.imzaBtnText, { color: colors.text }]}>Temizle</Text>
+                            </Pressable>
+                            <Pressable style={[styles.imzaBtn, { backgroundColor: isDark ? colors.background : '#F1F5F9' }]} onPress={modalKapat}>
+                                <Text style={[styles.imzaBtnText, { color: colors.text }]}>Vazgeç</Text>
+                            </Pressable>
+                            <Pressable style={[styles.imzaBtn, { backgroundColor: '#2563EB', flex: 1.4 }]} onPress={() => modalRef.current?.readSignature()} disabled={isSaving}>
+                                {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.imzaBtnText, { color: '#fff' }]}>Onayla</Text>}
+                            </Pressable>
+                        </View>
+                    </WrapperContainer>
                 </View>
             </Modal>
         </View>
@@ -1622,12 +1746,12 @@ const styles = StyleSheet.create({
     actionLabel: { fontSize: fs(10), fontWeight: '700' },
 
     // Tab bar
-    tabBar: { borderBottomWidth: 1 },
-    tabScroll: { paddingHorizontal: spacing.gutter, gap: 0 },
-    tabItem: { paddingHorizontal: spacing.s + 4, paddingBottom: spacing.s, alignItems: 'center', marginRight: spacing.xs },
-    tabLabel: { fontSize: fs(13) },
-    tabUnderline: { height: 2, width: '100%', backgroundColor: '#2563EB', borderRadius: 2, marginTop: sp(4) },
-    tabContent: { marginTop: spacing.s },
+    tabBar: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderRadius: sp(16), padding: sp(4), marginTop: spacing.xs },
+    tabItem: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: sp(4), paddingVertical: spacing.s, borderRadius: sp(12) },
+    tabItemActive: { backgroundColor: '#2563EB14' },
+    tabLabel: { fontSize: fs(10), fontWeight: '700' },
+    tabContent: { marginTop: spacing.m },
+    cardCount: { fontSize: fs(11), fontWeight: '700' },
 
     // Kart
     card: { borderRadius: sp(16), borderWidth: 1, overflow: 'hidden', marginBottom: spacing.m },
@@ -1644,12 +1768,17 @@ const styles = StyleSheet.create({
 
     // Özet istatistik kartları
     tabSection: { paddingBottom: sp(40) },
+    tabSummaryCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, borderWidth: 1, borderRadius: sp(16), padding: spacing.m, marginBottom: spacing.m },
+    tabSummaryIcon: { width: sp(42), height: sp(42), borderRadius: sp(14), backgroundColor: '#2563EB14', alignItems: 'center', justifyContent: 'center' },
+    tabSummaryBody: { flex: 1 }, tabSummaryEyebrow: { fontSize: fs(10), fontWeight: '800', letterSpacing: 0.6 }, tabSummaryValue: { fontSize: fs(16), fontWeight: '800', marginTop: sp(2) }, tabSummaryAmount: { fontSize: fs(14), fontWeight: '800' },
+    paymentProgressCard: { borderWidth: 1, borderRadius: sp(16), padding: spacing.m, marginBottom: spacing.m }, paymentProgressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s }, paymentProgressTitle: { fontSize: fs(16), fontWeight: '800', marginTop: sp(2) }, paymentProgressPercent: { fontSize: fs(18), fontWeight: '800' }, progressTrack: { height: sp(8), borderRadius: sp(99), overflow: 'hidden', marginTop: spacing.m }, progressFill: { height: '100%', borderRadius: sp(99) }, paymentProgressCaption: { fontSize: fs(11), fontWeight: '600', marginTop: spacing.s },
     statsRow: { flexDirection: 'row', gap: spacing.s, marginBottom: spacing.m },
     statCard: { flex: 1, borderRadius: sp(14), borderWidth: 1, paddingVertical: spacing.m, alignItems: 'center', gap: sp(4) },
     statValue: { fontSize: fs(14), fontWeight: '800' },
     statLabel: { fontSize: fs(10), fontWeight: '600', textAlign: 'center' },
 
-    faultText: { fontSize: fs(13), lineHeight: sp(20), fontWeight: '400' },
+faultText: { fontSize: fs(13), lineHeight: sp(20), fontWeight: '400' },
+    photoGalleryLink: { flexDirection: 'row', alignItems: 'center', gap: sp(2), paddingVertical: sp(3) }, photoGalleryLinkText: { color: '#7C3AED', fontSize: fs(11), fontWeight: '800' }, photoPreviewRow: { gap: spacing.xs, paddingVertical: spacing.xs }, photoPreviewItem: { width: sp(92), height: sp(92), overflow: 'hidden', borderRadius: sp(12), backgroundColor: '#E2E8F0' }, photoPreviewImage: { width: '100%', height: '100%' }, photoMoreOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.62)' }, photoMoreText: { color: '#FFFFFF', fontSize: fs(16), fontWeight: '800' }, photoEmptyPreview: { minHeight: sp(76), flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.s, borderWidth: 1, borderRadius: sp(12), borderStyle: 'dashed' }, photoEmptyText: { fontSize: fs(12), fontWeight: '700' },
 
     // İşlem satırı
     itemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.s + 2, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -1725,11 +1854,17 @@ const styles = StyleSheet.create({
     imzaKutu: { height: 140, borderWidth: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
     imzaResim: { width: '100%', height: '100%', resizeMode: 'contain' },
     imzaPlaceholder: { fontSize: fs(13), fontWeight: '500' },
-    modalSafe: { flex: 1, padding: spacing.m, paddingTop: spacing.xl },
-    modalBaslik: { fontSize: fs(20), fontWeight: '800', marginBottom: sp(4) },
-    modalAciklama: { fontSize: fs(14), fontWeight: '500', marginBottom: spacing.m },
-    modalCanvasKutu: { height: 350, borderWidth: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },
-    modalButonSatiri: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.m },
+    signatureStatusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.m }, signatureStatus: { flexDirection: 'row', alignItems: 'center', gap: sp(5), paddingHorizontal: spacing.s, paddingVertical: sp(6), borderRadius: sp(999) }, signatureStatusText: { fontSize: fs(11), fontWeight: '800' },
+    imzaModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.48)' },
+    modalSafe: { flex: 0, height: '74%', borderTopLeftRadius: sp(24), borderTopRightRadius: sp(24), overflow: 'hidden' },
+    modalContent: { paddingHorizontal: spacing.m, paddingTop: spacing.m, paddingBottom: spacing.s },
+    modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.s, marginBottom: spacing.m },
+    modalHeaderText: { flex: 1 },
+    modalBaslik: { fontSize: fs(19), fontWeight: '800', marginBottom: sp(4) },
+    modalAciklama: { fontSize: fs(13), fontWeight: '500', lineHeight: sp(19) },
+    modalCloseButton: { width: sp(38), height: sp(38), borderRadius: sp(14), borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    modalCanvasKutu: { flex: 1, minHeight: sp(160), borderWidth: 1, borderRadius: sp(14), overflow: 'hidden', backgroundColor: '#fff' },
+    modalButonSatiri: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.m, paddingBottom: spacing.xs },
     imzaBtn: { flex: 1, paddingVertical: spacing.m, borderRadius: sp(12), alignItems: 'center', justifyContent: 'center' },
     imzaBtnText: { fontSize: fs(14), fontWeight: '700' },
 });

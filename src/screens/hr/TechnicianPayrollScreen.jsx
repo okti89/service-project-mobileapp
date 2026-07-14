@@ -246,22 +246,24 @@ export default function TechnicianPayrollScreen({ navigation }) {
                                     </View>
                                 </View>
                             </View>
-                            <View style={[styles.monthPill, { backgroundColor: colors.backgroundSecondary }]}> 
-                                <MaterialCommunityIcons name="calendar-month-outline" size={18} color={serviceBlue} />
-                                <Text style={[styles.monthPillText, { color: serviceBlue }]}>{monthDisplay}</Text>
-                            </View>
                         </View>
 
-                        <View style={styles.monthNav}> 
-                            <Pressable onPress={() => shiftMonth(-1)} style={[styles.monthArrow, { backgroundColor: colors.backgroundSecondary }]}>
-                                <MaterialCommunityIcons name="chevron-left" size={18} color={colors.text} />
+                        <View style={[styles.monthNav, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+                            <Pressable onPress={() => shiftMonth(-1)} style={styles.monthArrow}>
+                                <MaterialCommunityIcons name="chevron-left" size={22} color={colors.text} />
                             </Pressable>
-                            <Pressable onPress={() => shiftMonth(1)} style={[styles.monthArrow, { backgroundColor: colors.backgroundSecondary }]}>
-                                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.text} />
+                            <View style={styles.monthNavCenter}>
+                                <MaterialCommunityIcons name="calendar-month-outline" size={20} color={serviceBlue} />
+                                <Text style={[styles.monthText, { color: colors.text }]}>{monthDisplay}</Text>
+                            </View>
+                            <Pressable onPress={() => shiftMonth(1)} style={styles.monthArrow}>
+                                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text} />
                             </Pressable>
                         </View>
 
                         <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                        <Text style={[styles.summaryTitle, { color: colors.text }]}>Bordro Özeti</Text>
 
                         {activePayroll ? (
                             <>
@@ -335,8 +337,8 @@ export default function TechnicianPayrollScreen({ navigation }) {
 const styles = StyleSheet.create({
     loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     content: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
-    heroCard: { borderWidth: 1, borderRadius: 20, padding: 14, gap: 12, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-    heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+    heroCard: { borderWidth: 1, borderRadius: 24, padding: 16, gap: 16, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+    heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
     identityRow: { flexDirection: 'row', flex: 1, gap: 12 },
     avatar: { width: 52, height: 52, borderRadius: 26 },
     avatarFallback: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
@@ -349,7 +351,8 @@ const styles = StyleSheet.create({
     statusText: { fontSize: 12, fontWeight: '600' },
     monthPill: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
     monthPillText: { fontSize: 12, fontWeight: '700' },
-    monthNav: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+    monthNav: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, padding: 6 },
+    monthNavCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     monthArrow: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     divider: { height: StyleSheet.hairlineWidth },
     netRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
     emptyCurrentTitle: { fontSize: 15, fontWeight: '700' },
     emptyCurrentText: { fontSize: 13, lineHeight: 18 },
     metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    metricCard: { width: '48.5%', minHeight: 78, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, gap: 9 },
+    metricCard: { width: '48%', minHeight: 74, borderRadius: 18, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, paddingVertical: 10, gap: 9 },
     metricIcon: { width: 32, height: 32, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     metricCopy: { flex: 1, gap: 2 },
     metricLabel: { fontSize: 11, fontWeight: '600' },

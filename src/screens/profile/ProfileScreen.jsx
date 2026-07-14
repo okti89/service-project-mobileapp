@@ -26,6 +26,20 @@ import { serviceGreen } from '@/theme/color';
 
 const initialsOf = (label) => String(label || '').trim().split(/\s+/).map((chunk) => chunk[0]).join('').slice(0, 2).toUpperCase();
 
+const STATUS_LABELS = {
+    available: 'Müsait',
+    busy: 'Meşgul',
+    unavailable: 'Müsait Değil',
+    offline: 'Çevrimdışı',
+    online: 'Çevrimiçi',
+    on_leave: 'İzinde',
+};
+
+const getStatusLabel = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return STATUS_LABELS[normalized] || value || 'Müsait';
+};
+
 function SectionCard({ title, colors, children }) {
     return <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>{title ? <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text></View> : null}{children}</View>;
 }
@@ -65,11 +79,12 @@ export default function ProfileScreen({ navigation }) {
         ]);
     }, [logout]);
 
-    const fullName = userInfo?.full_name || [userInfo?.first_name, userInfo?.last_name].filter(Boolean).join(' ') || userInfo?.email || 'Kullanıcı';
+    const fullName = userInfo?.full_name || [userInfo?.first_name, userInfo?.last_name].filter(Boolean).join(' ') || 'Kullanıcı';
+    const email = userInfo?.email || '';
     const roleLabel = userInfo?.user_type_display || 'Teknik Servis Uzmanı';
     const companyName = config?.name || 'Servis Yönetim Sistemi';
     const avatarUri = resolveMediaUrl(userInfo?.avatar);
-    const statusName = profile?.status_display || 'Müsait';
+    const statusName = getStatusLabel(profile?.status_display || profile?.status);
     const statusColor = profile?.status_info?.color || serviceGreen;
     const rightActions = [{ icon: 'bell-outline', onPress: () => navigation.navigate('Notifications'), badge: unreadCount, accessibilityLabel: 'Bildirimler' }];
 
@@ -77,21 +92,22 @@ export default function ProfileScreen({ navigation }) {
         return <WrapperContainer bg={colors.background} edges={NO_BOTTOM_EDGES}><Header title="Profil" rightActions={rightActions} borderBottom /><View style={styles.centerState}><ActivityIndicator size="large" color={colors.primary} /></View></WrapperContainer>;
     }
 
-    return <WrapperContainer bg={colors.background} edges={NO_BOTTOM_EDGES}><Header title="Profil" rightActions={rightActions} borderBottom /><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}><SectionCard colors={colors}><Pressable style={styles.heroRow} onPress={() => navigation.navigate('ProfileEdit')}>{avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={[styles.avatarFallback, { backgroundColor: `${colors.primary}16` }]}><Text style={[styles.avatarFallbackText, { color: colors.primary }]}>{initialsOf(fullName)}</Text></View>}<View style={styles.heroContent}><Text style={[styles.heroName, { color: colors.text }]}>{fullName}</Text><Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>{roleLabel}</Text><Text style={[styles.heroSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{companyName}</Text><View style={styles.statusRow}><View style={[styles.statusDot, { backgroundColor: statusColor }]} /><Text style={[styles.statusText, { color: colors.textSecondary }]}>{statusName}</Text></View></View><MaterialCommunityIcons name="chevron-right" size={22} color={colors.textTertiary} /></Pressable></SectionCard><SectionCard title="Hesap" colors={colors}><MenuItem icon="account-edit-outline" title="Profili Düzenle" colors={colors} onPress={() => navigation.navigate('ProfileEdit')} /><MenuItem icon="account-outline" title="Kişisel Bilgiler" colors={colors} onPress={() => navigation.navigate('ProfilePersonalInfo')} /><MenuItem icon="lock-reset" title="Parola Değiştir" colors={colors} onPress={() => navigation.navigate('ProfileChangePassword')} /><MenuItem icon="chart-line" title="Performansım" colors={colors} onPress={() => navigation.navigate('ProfilePerformance')} /><MenuItem icon="clock-outline" title="Mesailerim" colors={colors} onPress={() => navigation.navigate('ProfileMyShifts')} /><MenuItem icon="file-document-outline" title="Maaş Bordro" colors={colors} onPress={() => navigation.navigate('TechnicianPayroll')} /></SectionCard><SectionCard colors={colors}><MenuItem icon="logout" title="Çıkış Yap" colors={colors} danger onPress={handleLogoutPress} /></SectionCard></ScrollView></WrapperContainer>;
+    return <WrapperContainer bg={colors.background} edges={NO_BOTTOM_EDGES}><Header title="Profil" rightActions={rightActions} borderBottom /><ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}><SectionCard colors={colors}><Pressable style={styles.heroRow} onPress={() => navigation.navigate('ProfileEdit')}>{avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatar} /> : <View style={[styles.avatarFallback, { backgroundColor: `${colors.primary}16` }]}><Text style={[styles.avatarFallbackText, { color: colors.primary }]}>{initialsOf(fullName)}</Text></View>}<View style={styles.heroContent}><Text style={[styles.heroName, { color: colors.text }]} numberOfLines={1}>{fullName}</Text>{email ? <Text style={[styles.emailText, { color: colors.textSecondary }]} numberOfLines={1}>{email}</Text> : null}<Text style={[styles.heroSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{roleLabel}</Text><Text style={[styles.heroSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{companyName}</Text><View style={styles.statusRow}><View style={[styles.statusDot, { backgroundColor: statusColor }]} /><Text style={[styles.statusText, { color: colors.textSecondary }]}>{statusName}</Text></View></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} /></Pressable></SectionCard><SectionCard title="Hesap" colors={colors}><MenuItem icon="account-edit-outline" title="Profili Düzenle" colors={colors} onPress={() => navigation.navigate('ProfileEdit')} /><MenuItem icon="account-outline" title="Kişisel Bilgiler" colors={colors} onPress={() => navigation.navigate('ProfilePersonalInfo')} /><MenuItem icon="lock-reset" title="Parola Değiştir" colors={colors} onPress={() => navigation.navigate('ProfileChangePassword')} /><MenuItem icon="chart-line" title="Performansım" colors={colors} onPress={() => navigation.navigate('ProfilePerformance')} /><MenuItem icon="clock-outline" title="Mesailerim" colors={colors} onPress={() => navigation.navigate('ProfileMyShifts')} /><MenuItem icon="file-document-outline" title="Maaş Bordro" colors={colors} onPress={() => navigation.navigate('TechnicianPayroll')} /></SectionCard><SectionCard colors={colors}><MenuItem icon="logout" title="Çıkış Yap" colors={colors} danger onPress={handleLogoutPress} /><MenuItem icon="delete-alert-outline" title="Hesabımı Sil" colors={colors} danger onPress={() => navigation.navigate('ProfileDeleteAccount')} /></SectionCard></ScrollView></WrapperContainer>;
 }
 
 const styles = StyleSheet.create({
     content: { paddingHorizontal: spacing.gutter, paddingTop: spacing.l, paddingBottom: spacing['5xl'], gap: spacing.m },
     centerState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    sectionCard: { borderWidth: 1, borderRadius: 24, padding: spacing.l, gap: spacing.m, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+    sectionCard: { borderWidth: 1, borderRadius: 20, padding: spacing.l, gap: spacing.m, shadowColor: '#0F172A', shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.m },
     sectionTitle: { ...typography.body, fontWeight: '800' },
     heroRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
-    avatar: { width: 88, height: 88, borderRadius: 28 },
-    avatarFallback: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-    avatarFallbackText: { fontSize: 28, fontWeight: '800' },
-    heroContent: { flex: 1, gap: 4 },
-    heroName: { ...typography.h3, fontWeight: '800' },
+    avatar: { width: 64, height: 64, borderRadius: 20 },
+    avatarFallback: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    avatarFallbackText: { fontSize: 20, fontWeight: '800' },
+    heroContent: { flex: 1, gap: 2 },
+    heroName: { ...typography.body, fontWeight: '800' },
+    emailText: { ...typography.caption },
     heroSubtitle: { ...typography.bodySmall },
     statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.xs },
     statusDot: { width: 10, height: 10, borderRadius: 5 },

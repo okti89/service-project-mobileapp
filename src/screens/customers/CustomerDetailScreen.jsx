@@ -158,7 +158,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
 
     if (loading) {
         return (
-            <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+            <View style={[styles.screen, { backgroundColor: colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                     <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
                         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
@@ -175,7 +175,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
 
     if (!customer) {
         return (
-            <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+            <View style={[styles.screen, { backgroundColor: colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                     <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
                         <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
@@ -218,7 +218,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
     payments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     return (
-        <View style={[styles.screen, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+        <View style={[styles.screen, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8, alignItems: 'center' }]}>
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -334,7 +334,7 @@ export default function CustomerDetailScreen({ navigation, route }) {
                 {/* Active Services List */}
                 <View style={styles.sectionHeader}>
                     <Text style={[styles.sectionTitleText, { color: colors.text }]}>Aktif Servisler</Text>
-                    <Pressable onPress={() => navigation.navigate('ServiceList', { customerId: customer.id })} style={styles.sectionMoreBtn}>
+                    <Pressable onPress={() => navigation.navigate('AdminCustomerServices', { customerId: customer.id, customerName: customer.full_name })} style={styles.sectionMoreBtn}>
                         <Text style={[styles.sectionMoreText, { color: serviceBlue }]}>Tümü</Text>
                         <MaterialCommunityIcons name="chevron-right" size={16} color={serviceBlue} />
                     </Pressable>

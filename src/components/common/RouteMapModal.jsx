@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Platform, Linking, ActivityIndicator, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Platform, Linking, ActivityIndicator, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
-import { sp, fs, spacing } from '@/theme/responsive';
+import { sp, fs } from '@/theme/scale';
+import { spacing } from '@/theme/spacing';
 import api from '@/api/axios';
+import AppBottomSheet from '@/components/AppBottomSheet';
 
 export default function RouteMapModal({ visible, onClose, address, customerName }) {
     const { colors, isDark } = useTheme();
@@ -151,8 +152,7 @@ export default function RouteMapModal({ visible, onClose, address, customerName 
     };
 
     return (
-        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-            <SafeAreaView style={[styles.modalSafe, { backgroundColor: isDark ? colors.surface : '#FFFFFF' }]}>
+        <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['90%']} wrapContent={false}>
                 <View style={styles.mapModalContainer}>
                     <View style={styles.mapModalHeader}>
                         <View style={{ flex: 1, paddingRight: spacing.m }}>
@@ -231,14 +231,12 @@ export default function RouteMapModal({ visible, onClose, address, customerName 
                         </Pressable>
                     </View>
                 </View>
-            </SafeAreaView>
-        </Modal>
+        </AppBottomSheet>
     );
 }
 
 const styles = StyleSheet.create({
-    modalSafe: { flex: 1 },
-    mapModalContainer: { flex: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.s },
+        mapModalContainer: { flex: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.s },
     mapModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.m },
     mapModalTitle: { fontSize: 16, fontWeight: '800' },
     mapModalSubtitle: { fontSize: 12, fontWeight: '600', marginTop: 2 },

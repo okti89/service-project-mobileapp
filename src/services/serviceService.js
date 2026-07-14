@@ -28,6 +28,22 @@ const getApiFileUrl = (endpoint, params = {}) => {
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
+const createPhotoFormData = (payload = {}, pk = null) => {
+    const formData = new FormData();
+    if (pk) formData.append('pk', String(pk));
+    if (payload.service) formData.append('service', String(payload.service));
+    if (payload.description !== undefined) formData.append('description', payload.description || '');
+
+    if (payload.image?.uri) {
+        formData.append('image', {
+            uri: payload.image.uri,
+            name: payload.image.fileName || `service_photo_${Date.now()}.jpg`,
+            type: payload.image.mimeType || 'image/jpeg',
+        });
+    }
+    return formData;
+};
+
 const serviceService = {
     getTechnicianServices: async (params = {}) => {
         const response = await api.get(ENDPOINTS.SERVICES.TECHNICIAN_LIST, { params });
@@ -110,7 +126,23 @@ const serviceService = {
     },
 
     createServicePhoto: async (payload) => {
-        const response = await api.post(ENDPOINTS.SERVICES.SERVICE_PHOTOS, payload);
+        const response = await api.post(
+            ENDPOINTS.SERVICES.SERVICE_PHOTOS,
+            createPhotoFormData(payload)
+        );
+        return response?.data;
+    },
+
+    updateServicePhoto: async (pk, payload) => {
+        const response = await api.patch(
+            ENDPOINTS.SERVICES.SERVICE_PHOTOS,
+            createPhotoFormData(payload, pk)
+        );
+        return response?.data;
+    },
+
+    deleteServicePhoto: async (pk) => {
+        const response = await api.delete(ENDPOINTS.SERVICES.SERVICE_PHOTOS, { data: { pk } });
         return response?.data;
     },
 

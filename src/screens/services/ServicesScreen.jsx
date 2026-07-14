@@ -17,7 +17,7 @@ import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 import * as FileSystem from 'expo-file-system/legacy';
-import Share from 'react-native-share';
+import { getNativeShare } from '@/utils/nativeShare';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfig } from '@/context/ConfigContext';
@@ -31,6 +31,7 @@ import AppBottomSheet from '@/components/AppBottomSheet';
 import { fs as fontScale, sp } from '@/theme/scale';
 import { spacing } from '@/theme/spacing';
 import Header from '@/components/Header';
+import RouteMapModal from '@/components/common/RouteMapModal';
 import serviceService from '@/services/serviceService';
 
 dayjs.locale('tr');
@@ -40,24 +41,24 @@ const getStatusColor = (status) => {
         case 'in_progress':
             return { color: '#D97706', bgColor: '#FEF3C7', label: 'Devam Ediyor' };
         case 'completed':
-            return { color: '#16A34A', bgColor: '#DCFCE7', label: 'Tamamland\u0131' };
+            return { color: '#16A34A', bgColor: '#DCFCE7', label: 'Tamamlandı' };
         case 'new':
         case 'assigned':
-            return { color: '#2563EB', bgColor: '#DBEAFE', label: 'Planland\u0131' };
+            return { color: '#2563EB', bgColor: '#DBEAFE', label: 'Planlandı' };
         default:
-            return { color: '#4B5563', bgColor: '#F3F4F6', label: 'Planland\u0131' };
+            return { color: '#4B5563', bgColor: '#F3F4F6', label: 'Planlandı' };
     }
 };
 
 const getStatusLabel = (status) => {
     switch (status) {
         case 'new': return 'Yeni';
-        case 'assigned': return 'Atand\u0131';
+        case 'assigned': return 'Atandı';
         case 'in_progress': return 'Devam Ediyor';
         case 'postponed': return 'Ertelendi';
-        case 'completed': return 'Tamamland\u0131';
-        case 'cancelled': return '\u0130ptal Edildi';
-        default: return 'Planland\u0131';
+        case 'completed': return 'Tamamlandı';
+        case 'cancelled': return 'İptal Edildi';
+        default: return 'Planlandı';
     }
 };
 
@@ -75,7 +76,7 @@ const buildTrackingUrl = (panelUrl, serviceId) => {
     return baseUrl ? baseUrl + '/service-tracking/' + serviceId + '/' : '';
 };
 
-const ServiceCard = ({ item, onOpenWhatsappSheet, onOpenSmsSheet }) => {
+const ServiceCard = ({ item, onPress, onOpenWhatsappSheet, onOpenSmsSheet, onOpenActions }) => {
     const { colors } = useTheme();
     const badge = getStatusColor(item.service_status);
     const time = item.scheduled_date ? dayjs(item.scheduled_date).format('HH:mm') : '--:--';
@@ -83,17 +84,17 @@ const ServiceCard = ({ item, onOpenWhatsappSheet, onOpenSmsSheet }) => {
 
     const handleCall = () => {
         if (!item.customer_phone) {
-            Alert.alert('Hata', 'Telefon numaras\u0131 bulunamad\u0131.');
+            Alert.alert('Hata', 'Telefon numarası bulunamadı.');
             return;
         }
         Linking.openURL('tel:' + item.customer_phone).catch(() => {
-            Alert.alert('Hata', 'Arama ba\u015flat\u0131lamad\u0131.');
+            Alert.alert('Hata', 'Arama başlatılamadı.');
         });
     };
 
     const handleNavigation = () => {
         if (!item.customer_address) {
-            Alert.alert('Hata', 'Adres bilgisi bulunamad\u0131.');
+            Alert.alert('Hata', 'Adres bilgisi bulunamadı.');
             return;
         }
         const url = Platform.select({
@@ -107,8 +108,9 @@ const ServiceCard = ({ item, onOpenWhatsappSheet, onOpenSmsSheet }) => {
     };
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-            <View style={styles.cardHeader}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable onPress={onPress} style={styles.cardMainArea}>
+                <View style={styles.cardHeader}>
                 <Text style={[styles.cardTime, { color: serviceBlue }]}>{time}</Text>
                 <View style={[styles.badgeContainer, { backgroundColor: badge.bgColor }]}>
                     <Text style={[styles.badgeLabel, { color: badge.color }]}>{badge.label}</Text>
@@ -139,49 +141,51 @@ const ServiceCard = ({ item, onOpenWhatsappSheet, onOpenSmsSheet }) => {
                         </Text>
                     </View>
                 ) : null}
-            </View>
+                </View>
+            </Pressable>
 
-            <View style={[styles.cardActions, { borderTopColor: colors.border }]}> 
-                <Pressable onPress={() => onOpenWhatsappSheet(item)} style={styles.actionBtn}>
+            <View style={[styles.cardActions, { borderTopColor: colors.border }]}>
+                <Pressable onPress={() => onOpenWhatsappSheet(item)} accessibilityLabel="WhatsApp" style={styles.actionBtn}>
                     <MaterialCommunityIcons name="whatsapp" size={16} color="#25D366" />
-                    <Text style={[styles.actionBtnText, { color: '#25D366' }]}>WhatsApp</Text>
                 </Pressable>
-                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                <Pressable onPress={() => onOpenSmsSheet(item)} style={styles.actionBtn}>
+                <Pressable onPress={() => onOpenSmsSheet(item)} accessibilityLabel="SMS" style={styles.actionBtn}>
                     <MaterialCommunityIcons name="message-text-outline" size={16} color={serviceBlue} />
-                    <Text style={[styles.actionBtnText, { color: serviceBlue }]}>SMS</Text>
                 </Pressable>
-                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                <Pressable onPress={handleCall} style={styles.actionBtn}>
+                <Pressable onPress={handleCall} accessibilityLabel="Müşteriyi ara" style={styles.actionBtn}>
                     <MaterialCommunityIcons name="phone-outline" size={16} color={serviceGreen} />
-                    <Text style={[styles.actionBtnText, { color: serviceGreen }]}>Ara</Text>
                 </Pressable>
-                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                <Pressable onPress={handleNavigation} style={styles.actionBtn}>
+                <Pressable onPress={handleNavigation} accessibilityLabel="Yol tarifi al" style={styles.actionBtn}>
                     <MaterialCommunityIcons name="navigation-variant-outline" size={16} color="#7C3AED" />
-                    <Text style={[styles.actionBtnText, { color: '#7C3AED' }]}>Yol Tarifi</Text>
+                </Pressable>
+                <Pressable onPress={() => onOpenActions(item)} accessibilityLabel="Hızlı işlemler" style={styles.actionBtn}>
+                    <MaterialCommunityIcons name="cog-outline" size={16} color="#64748B" />
                 </Pressable>
             </View>
         </View>
     );
 };
 
-export default function ServicesScreen({ navigation }) {
+export default function ServicesScreen({ navigation, route }) {
     const insets = useSafeAreaInsets();
     const { colors, isDark } = useTheme();
-    const { isAdmin } = useAuth();
+    const { isAdmin, mobilePermissions } = useAuth();
     const { config } = useConfig();
     const { showToast } = useToast();
+    const customerId = route?.params?.customerId || null;
+    const canCreateService = isAdmin || Boolean(mobilePermissions?.can_manage_services);
 
     const calendarPickerRef = useRef(null);
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [activeTab, setActiveTab] = useState('my');
+    const [activeTab, setActiveTab] = useState(customerId ? 'all' : 'my');
     const [viewMode, setViewMode] = useState('day');
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedService, setSelectedService] = useState(null);
     const [communicationType, setCommunicationType] = useState(null);
+    const [actionService, setActionService] = useState(null);
+    const [actionsVisible, setActionsVisible] = useState(false);
+    const [routeService, setRouteService] = useState(null);
 
     const fetchServices = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);
@@ -191,7 +195,9 @@ export default function ServicesScreen({ navigation }) {
             const endpoint = (isAdmin && activeTab === 'all')
                 ? ENDPOINTS.SERVICES.ADMIN_LIST
                 : ENDPOINTS.SERVICES.TECHNICIAN_LIST;
-            const params = { start_date: startStr, end_date: endStr };
+            const params = customerId
+                ? { customer: customerId }
+                : { start_date: startStr, end_date: endStr };
             const res = await api.get(endpoint, { params });
             setServices(Array.isArray(res?.data) ? res.data : []);
         } catch (err) {
@@ -200,7 +206,7 @@ export default function ServicesScreen({ navigation }) {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedDate, activeTab, viewMode, isAdmin]);
+    }, [selectedDate, activeTab, viewMode, isAdmin, customerId]);
 
     useEffect(() => {
         fetchServices();
@@ -213,6 +219,12 @@ export default function ServicesScreen({ navigation }) {
         fetchServices(true);
     };
 
+    const openCreateService = useCallback(() => {
+        navigation.navigate('CreateService', {
+            onSuccess: () => fetchServices(),
+        });
+    }, [fetchServices, navigation]);
+
     const dateLabel = useMemo(() => {
         if (viewMode === 'day') {
             return dayjs(selectedDate).isSame(dayjs(), 'day') ? 'Bugün' : dayjs(selectedDate).format('D MMMM YYYY');
@@ -220,6 +232,19 @@ export default function ServicesScreen({ navigation }) {
         if (viewMode === 'month') return dayjs(selectedDate).format('MMMM YYYY');
         return dayjs(selectedDate).format('YYYY');
     }, [selectedDate, viewMode]);
+
+    const handleActionCall = useCallback((phone) => {
+        if (!phone) {
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
+            return;
+        }
+        Linking.openURL('tel:' + phone).catch(() => showToast('error', 'Hata', 'Arama başlatılamadı.'));
+    }, [showToast]);
+
+    const openActionsSheet = useCallback((service) => {
+        setActionService(service);
+        setActionsVisible(true);
+    }, []);
 
     const openCommunicationSheet = useCallback((service, type) => {
         setSelectedService(service);
@@ -234,52 +259,57 @@ export default function ServicesScreen({ navigation }) {
     const handleWhatsAppTracking = useCallback(async () => {
         const phone = selectedService?.customer_phone;
         if (!phone) {
-            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
             return;
         }
         const cleanPhone = normalizePhoneForWhatsApp(phone);
         const trackingUrl = buildTrackingUrl(config?.panel_url, selectedService?.id);
         const statusLabel = getStatusLabel(selectedService?.service_status);
-        const customerName = selectedService?.customer_full_name || 'M\u00fc\u015fterimiz';
-        const message = `Say\u0131n ${customerName}\n\nServis kayd\u0131n\u0131z\u0131n durumu: *${statusLabel}*\n\nTakip linki: ${trackingUrl || 'Yok'}`;
+        const customerName = selectedService?.customer_full_name || 'Müşterimiz';
+        const message = `Sayın ${customerName}\n\nServis kaydınızın durumu: *${statusLabel}*\n\nTakip linki: ${trackingUrl || 'Yok'}`;
         closeCommunicationSheet();
         Linking.openURL('https://wa.me/' + cleanPhone + '?text=' + encodeURIComponent(message)).catch(() => {
-            showToast('error', 'Hata', 'WhatsApp a\u00e7\u0131lamad\u0131.');
+            showToast('error', 'Hata', 'WhatsApp açılamadı.');
         });
     }, [closeCommunicationSheet, config?.panel_url, selectedService, showToast]);
 
     const handleSmsTracking = useCallback(async () => {
         const phone = String(selectedService?.customer_phone || '').replace(/\D/g, '');
         if (!phone) {
-            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
             return;
         }
         const trackingUrl = buildTrackingUrl(config?.panel_url, selectedService?.id);
         const statusLabel = getStatusLabel(selectedService?.service_status);
-        const customerName = selectedService?.customer_full_name || 'M\u00fc\u015fterimiz';
-        const message = `Say\u0131n ${customerName}, servis kayd\u0131n\u0131z\u0131n durumu: ${statusLabel}. Takip linki: ${trackingUrl || 'Yok'}`;
+        const customerName = selectedService?.customer_full_name || 'Müşterimiz';
+        const message = `Sayın ${customerName}, servis kaydınızın durumu: ${statusLabel}. Takip linki: ${trackingUrl || 'Yok'}`;
         closeCommunicationSheet();
         Linking.openURL('sms:' + phone + (Platform.OS === 'ios' ? '&' : '?') + 'body=' + encodeURIComponent(message)).catch(() => {
-            showToast('error', 'Hata', 'SMS a\u00e7\u0131lamad\u0131.');
+            showToast('error', 'Hata', 'SMS açılamadı.');
         });
     }, [closeCommunicationSheet, config?.panel_url, selectedService, showToast]);
 
-    const handleWhatsAppPdf = useCallback(async () => {
-        if (!selectedService?.id) return;
-        const phone = normalizePhoneForWhatsApp(selectedService?.customer_phone);
+    const handleWhatsAppPdf = useCallback(async (service = selectedService) => {
+        if (!service?.id) return;
+        const phone = normalizePhoneForWhatsApp(service?.customer_phone);
         if (!phone) {
-            showToast('warning', 'Telefon Eksik', 'M\u00fc\u015fteri telefon numaras\u0131 bulunamad\u0131.');
+            showToast('warning', 'Telefon Eksik', 'Müşteri telefon numarası bulunamadı.');
             return;
         }
         try {
             closeCommunicationSheet();
-            showToast('info', 'PDF', 'Servis formu haz\u0131rlan\u0131yor...');
-            const { uri, filename } = await serviceService.downloadServiceFormPdf(selectedService, { disposition: 'attachment' });
+            showToast('info', 'PDF', 'Servis formu hazirlaniyor...');
+            const nativeShare = getNativeShare();
+            if (!nativeShare) {
+                showToast('warning', 'Dev Modu', 'WhatsApp PDF gonderimi bu development build icinde kapali.');
+                return;
+            }
+            const { uri, filename } = await serviceService.downloadServiceFormPdf(service, { disposition: 'attachment' });
             const pdfBase64 = await FileSystem.readAsStringAsync(uri, {
                 encoding: FileSystem.EncodingType.Base64,
             });
-            await Share.shareSingle({
-                social: Share.Social.WHATSAPP,
+            await nativeShare.shareSingle({
+                social: nativeShare.Social.WHATSAPP,
                 whatsAppNumber: phone,
                 url: 'data:application/pdf;base64,' + pdfBase64,
                 type: 'application/pdf',
@@ -289,26 +319,17 @@ export default function ServicesScreen({ navigation }) {
         } catch (error) {
             if (error?.message && !String(error.message).toLowerCase().includes('cancel')) {
                 console.error('ServicesScreen WhatsApp PDF error:', error);
-                showToast('error', 'Hata', 'Servis formu WhatsApp ile g\u00f6nderilemedi.');
+                showToast('error', 'Hata', 'Servis formu WhatsApp ile gönderilemedi.');
             }
         }
     }, [closeCommunicationSheet, selectedService, showToast]);
 
     return (
         <WrapperContainer edges={NO_BOTTOM_EDGES}>
-            <View style={{ flex: 1, backgroundColor: isDark ? colors.background : '#F8FAFC' }}>
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
                 <Header
-                    title={'\u0053\u0065\u0072\u0076\u0069\u0073 \u004f\u0070\u0065\u0072\u0061\u0073\u0079\u006f\u006e\u006c\u0061\u0072\u0131'}
+                    title={'Servis Operasyonları'}
                     showBack
-                    rightActions={[
-                        {
-                            icon: 'plus',
-                            onPress: () => navigation.navigate('CreateService', {
-                                onSuccess: () => fetchServices(),
-                            }),
-                            accessibilityLabel: 'Yeni Servis Ekle',
-                        },
-                    ]}
                 />
 
                 {isAdmin ? (
@@ -326,7 +347,7 @@ export default function ServicesScreen({ navigation }) {
                             style={{ flex: 1, paddingVertical: sp(14), alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === 'all' ? '#2563EB' : 'transparent' }}
                         >
                             <Text style={{ fontSize: fontScale(13), fontWeight: '700', color: activeTab === 'all' ? '#2563EB' : colors.textSecondary }}>
-                                {'\u0054\u00fc\u006d \u0053\u0065\u0072\u0076\u0069\u0073\u006c\u0065\u0072'}
+                                {'Tüm Servisler'}
                             </Text>
                         </Pressable>
                     </View>
@@ -335,9 +356,9 @@ export default function ServicesScreen({ navigation }) {
                 <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.m, gap: spacing.m }}>
                     <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#F1F5F9', borderRadius: sp(10), padding: sp(4) }}>
                         {[
-                            { key: 'day', label: '\u0047\u00fc\u006e\u006c\u00fc\u006b' },
-                            { key: 'month', label: '\u0041\u0079\u006c\u0131\u006b' },
-                            { key: 'year', label: '\u0059\u0131\u006c\u006c\u0131\u006b' },
+                            { key: 'day', label: 'Günlük' },
+                            { key: 'month', label: 'Aylık' },
+                            { key: 'year', label: 'Yıllık' },
                         ].map((mode) => (
                             <Pressable
                                 key={mode.key}
@@ -352,7 +373,7 @@ export default function ServicesScreen({ navigation }) {
                     </View>
 
                     <View style={styles.dateSelectorRow}>
-                        <Pressable onPress={handlePrev} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}> 
+                        <Pressable onPress={handlePrev} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}>
                             <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
                         </Pressable>
 
@@ -365,7 +386,7 @@ export default function ServicesScreen({ navigation }) {
                             {viewMode === 'day' ? <MaterialCommunityIcons name="chevron-down" size={16} color={colors.textSecondary} style={{ marginLeft: 4 }} /> : null}
                         </Pressable>
 
-                        <Pressable onPress={handleNext} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}> 
+                        <Pressable onPress={handleNext} style={({ pressed }) => [styles.dateNavBtn, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: pressed ? 0.75 : 1 }]}>
                             <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
                         </Pressable>
                     </View>
@@ -380,20 +401,42 @@ export default function ServicesScreen({ navigation }) {
                         data={services}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={({ item }) => (
-                            <Pressable onPress={() => navigation.navigate('ServiceDetail', { serviceId: item.id, service: item })}>
-                                <ServiceCard item={item} onOpenWhatsappSheet={(service) => openCommunicationSheet(service, 'whatsapp')} onOpenSmsSheet={(service) => openCommunicationSheet(service, 'sms')} />
-                            </Pressable>
+                                <ServiceCard
+                                    item={item}
+                                    onPress={() => navigation.navigate('ServiceDetail', { serviceId: item.id, service: item })}
+                                    onOpenWhatsappSheet={(service) => openCommunicationSheet(service, 'whatsapp')}
+                                    onOpenSmsSheet={(service) => openCommunicationSheet(service, 'sms')}
+                                    onOpenActions={openActionsSheet}
+                                />
                         )}
-                        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+                        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + sp(104) }]}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[serviceBlue]} />}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={colors.textTertiary} />
-                                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>{'\u0053\u0065\u00e7\u0069\u006c\u0065\u006e \u0074\u0061\u0072\u0069\u0068\u006c\u0065\u0072\u0064\u0065 \u0073\u0065\u0072\u0076\u0069\u0073 \u006b\u0061\u0079\u0064\u0131 \u0062\u0075\u006c\u0075\u006e\u006d\u0075\u0079\u006f\u0072.'}</Text>
+                                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>{'Seçilen tarihlerde servis kaydı bulunmuyor.'}</Text>
                             </View>
                         }
                     />
                 )}
+
+                {canCreateService ? (
+                    <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Yeni servis ekle"
+                        onPress={openCreateService}
+                        style={({ pressed }) => [
+                            styles.createServiceFab,
+                            {
+                                backgroundColor: serviceBlue,
+                                bottom: insets.bottom + sp(12),
+                                opacity: pressed ? 0.82 : 1,
+                            },
+                        ]}
+                    >
+                        <MaterialCommunityIcons name="plus" size={sp(28)} color="#FFFFFF" />
+                    </Pressable>
+                ) : null}
 
                 <CalendarPickerSheet
                     ref={calendarPickerRef}
@@ -401,6 +444,46 @@ export default function ServicesScreen({ navigation }) {
                     activeTab={activeTab}
                     onSelectDate={(date) => setSelectedDate(date)}
                 />
+
+                <RouteMapModal
+                    visible={Boolean(routeService)}
+                    onClose={() => setRouteService(null)}
+                    address={routeService?.customer_address}
+                    customerName={routeService?.customer_full_name}
+                />
+
+                <AppBottomSheet visible={actionsVisible} onClose={() => setActionsVisible(false)} snapPoints={['78%']} wrapContent={false}>
+                    <BottomSheetScrollView style={styles.actionsSheetScroll} contentContainerStyle={[styles.sheetContent, styles.actionsSheetContent]} showsVerticalScrollIndicator={true} nestedScrollEnabled>
+                        <View style={styles.sheetHeader}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#2563EB1A' }]}><MaterialCommunityIcons name="tools" size={20} color="#2563EB" /></View>
+                            <View style={styles.sheetHeaderTextWrap}>
+                                <Text style={[styles.sheetTitle, { color: colors.text }]}>Hızlı işlemler</Text>
+                                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>{actionService?.customer_full_name || 'Müşteri'}</Text>
+                            </View>
+                        </View>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); navigation.navigate('ServiceDetail', { serviceId: actionService?.id, service: actionService }); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#2563EB1A' }]}><MaterialCommunityIcons name="eye-outline" size={20} color="#2563EB" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Detay Sayfasına Git</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Servisin tüm detaylarını görüntüle.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); navigation.navigate('ServiceDetail', { serviceId: actionService?.id, service: actionService, focus: 'technician' }); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#8B5CF61A' }]}><MaterialCommunityIcons name="account-edit-outline" size={20} color="#8B5CF6" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Teknisyen Değiştir</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Servise atanan teknisyeni güncelle.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); navigation.navigate('ServiceDetail', { serviceId: actionService?.id, service: actionService, focus: 'status' }); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#F59E0B1A' }]}><MaterialCommunityIcons name="progress-clock" size={20} color="#F59E0B" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Durum Güncelle</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Servisin anlık durumunu değiştir.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); handleActionCall(actionService?.customer_phone); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#10B9811A' }]}><MaterialCommunityIcons name="phone-outline" size={20} color="#10B981" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Müşteriyi Ara</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Müşteri ile telefon görüşmesi başlat.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); openCommunicationSheet(actionService, 'whatsapp'); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#22C55E1A' }]}><MaterialCommunityIcons name="whatsapp" size={20} color="#22C55E" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>WhatsApp ile Bilgi Ver</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Durum bilgisini WhatsApp'tan ilet.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); handleWhatsAppPdf(actionService); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#EF44441A' }]}><MaterialCommunityIcons name="file-pdf-box" size={20} color="#EF4444" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Servis Formu PDF Gönder</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Servis formunu WhatsApp ile PDF olarak ilet.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                        <Pressable style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]} onPress={() => { setActionsVisible(false); setRouteService(actionService); }}>
+                            <View style={[styles.sheetOptionIcon, { backgroundColor: '#EC48991A' }]}><MaterialCommunityIcons name="navigation-variant-outline" size={20} color="#EC4899" /></View><View style={styles.sheetOptionBody}><Text style={[styles.sheetOptionTitle, { color: colors.text }]}>Yol Tarifi Al</Text><Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Harita üzerinde adrese git.</Text></View><MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                    </BottomSheetScrollView>
+                </AppBottomSheet>
 
                 <AppBottomSheet
                     visible={Boolean(communicationType && selectedService)}
@@ -412,10 +495,10 @@ export default function ServicesScreen({ navigation }) {
                         <View style={styles.sheetHeader}>
                             <View style={styles.sheetHeaderTextWrap}>
                                 <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                                    {communicationType === 'whatsapp' ? '\u0057\u0068\u0061\u0074\u0073\u0041\u0070\u0070 \u0047\u00f6\u006e\u0064\u0065\u0072\u0069\u006d\u0069' : '\u0053\u004d\u0053 \u0047\u00f6\u006e\u0064\u0065\u0072\u0069\u006d\u0069'}
+                                    {communicationType === 'whatsapp' ? 'WhatsApp Gönderimi' : 'SMS Gönderimi'}
                                 </Text>
                                 <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
-                                    {selectedService?.customer_full_name || '\u004d\u00fc\u015f\u0074\u0065\u0072\u0069'}
+                                    {selectedService?.customer_full_name || 'Müşteri'}
                                 </Text>
                             </View>
                         </View>
@@ -430,13 +513,12 @@ export default function ServicesScreen({ navigation }) {
                                         <MaterialCommunityIcons name="link-variant" size={20} color="#16A34A" />
                                     </View>
                                     <View style={styles.sheetOptionBody}>
-                                        <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'\u0054\u0061\u006b\u0069\u0070 \u004c\u0069\u006e\u006b\u0069 \u0047\u00f6\u006e\u0064\u0065\u0072'}</Text>
-                                        <Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>{'\u0053\u0065\u0072\u0076\u0069\u0073 \u0064\u0075\u0072\u0075\u006d\u0075\u006e\u0075 \u0074\u0061\u006b\u0069\u0070 \u0065\u0064\u0065\u0062\u0069\u006c\u0065\u0063\u0065\u011f\u0069 \u0062\u0061\u011f\u006c\u0061\u006e\u0074\u0131\u0079\u0131 \u0067\u00f6\u006e\u0064\u0065\u0072.'}</Text>
+                                        <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'Takip Linki Gönder'}</Text>
+                                        <Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>{'Servis durumunu takip edebileceği bağlantıyı gönder.'}</Text>
                                     </View>
                                     <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                                 </Pressable>
 
-                                {isAdmin ? (
                                     <Pressable
                                         style={({ pressed }) => [styles.sheetOption, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
                                         onPress={handleWhatsAppPdf}
@@ -445,12 +527,12 @@ export default function ServicesScreen({ navigation }) {
                                             <MaterialCommunityIcons name="file-pdf-box" size={20} color="#EF4444" />
                                         </View>
                                         <View style={styles.sheetOptionBody}>
-                                            <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'\u0053\u0065\u0072\u0076\u0069\u0073 \u0046\u006f\u0072\u006d\u0075 \u0050\u0044\u0046 \u0047\u00f6\u006e\u0064\u0065\u0072'}</Text>
+                                            <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'Servis Formu PDF Gönder'}</Text>
                                             <Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>Servis formunu PDF ekli mesaj olarak ilet.</Text>
                                         </View>
                                         <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                                     </Pressable>
-                                ) : null}
+
                             </>
                         ) : null}
 
@@ -463,8 +545,8 @@ export default function ServicesScreen({ navigation }) {
                                     <MaterialCommunityIcons name="link-variant" size={20} color="#2563EB" />
                                 </View>
                                 <View style={styles.sheetOptionBody}>
-                                    <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'\u0054\u0061\u006b\u0069\u0070 \u004c\u0069\u006e\u006b\u0069 \u0047\u00f6\u006e\u0064\u0065\u0072'}</Text>
-                                    <Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>{'\u0053\u004d\u0053 \u0069\u006c\u0065 \u0073\u0065\u0072\u0076\u0069\u0073 \u0074\u0061\u006b\u0069\u0070 \u0062\u0061\u011f\u006c\u0061\u006e\u0074\u0131\u0073\u0131\u006e\u0131 \u0067\u00f6\u006e\u0064\u0065\u0072.'}</Text>
+                                    <Text style={[styles.sheetOptionTitle, { color: colors.text }]}>{'Takip Linki Gönder'}</Text>
+                                    <Text style={[styles.sheetOptionText, { color: colors.textSecondary }]}>{'SMS ile servis takip bağlantısını gönder.'}</Text>
                                 </View>
                                 <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
                             </Pressable>
@@ -565,27 +647,25 @@ const styles = StyleSheet.create({
         fontSize: fontScale(11),
         flex: 1,
     },
+    cardMainArea: {
+        paddingBottom: sp(12),
+    },
     cardActions: {
         borderTopWidth: 1,
-        paddingTop: sp(12),
+        paddingTop: sp(10),
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: sp(6),
     },
     actionBtn: {
         flex: 1,
-        flexDirection: 'row',
+        maxWidth: sp(52),
+        minHeight: sp(44),
         alignItems: 'center',
         justifyContent: 'center',
-        gap: sp(4),
-    },
-    actionBtnText: {
-        fontSize: fontScale(11),
-        fontWeight: '700',
-    },
-    actionDivider: {
-        width: 1,
-        height: sp(16),
+        borderRadius: sp(12),
+        backgroundColor: '#F8FAFC',
     },
     emptyState: {
         alignItems: 'center',
@@ -597,6 +677,22 @@ const styles = StyleSheet.create({
         fontSize: fontScale(12),
         textAlign: 'center',
     },
+    createServiceFab: {
+        position: 'absolute',
+        right: spacing.gutter,
+        width: sp(58),
+        height: sp(58),
+        borderRadius: sp(20),
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 7,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: sp(5) },
+        shadowOpacity: 0.24,
+        shadowRadius: sp(10),
+    },
+    actionsSheetScroll: { flex: 1 },
+    actionsSheetContent: { paddingBottom: sp(120), flexGrow: 1 },
     sheetContent: {
         paddingHorizontal: spacing.gutter,
         paddingTop: spacing.s,
@@ -604,9 +700,13 @@ const styles = StyleSheet.create({
         gap: spacing.s,
     },
     sheetHeader: {
-        marginBottom: spacing.xs,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.s,
+        marginBottom: spacing.s,
     },
     sheetHeaderTextWrap: {
+        flex: 1,
         gap: sp(2),
     },
     sheetTitle: {

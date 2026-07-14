@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useConfig } from '@/context/ConfigContext';
+import { useToast } from '@/context/ToastContext';
 import WrapperContainer from '@/components/WrapperContainer';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetView } from '@gorhom/bottom-sheet';
 
@@ -102,6 +103,7 @@ function SupportSheet({ sheetRef, onClose }) {
 const AccountDeactivatedScreen = () => {
     const { colors, isDark } = useTheme();
     const { logout, checkAuth, userInfo } = useAuth();
+    const { showToast } = useToast();
     const { config } = useConfig();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isContactOpen, setIsContactOpen] = useState(false);
@@ -112,8 +114,18 @@ const AccountDeactivatedScreen = () => {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await checkAuth();
-        setIsRefreshing(false);
+        try {
+            const result = await checkAuth();
+            if (result?.kind === 'deactivated' || result?.kind === 'rejected' || result?.kind === 'cached') {
+                showToast('warning', 'Hesap Kullanıma Kapalı', 'Hesap durumunuz henüz değişmedi.');
+            } else if (result?.kind === 'active') {
+                showToast('success', 'Hesabınız Aktifleştirildi', 'Uygulamaya yönlendiriliyorsunuz.');
+            } else if (result?.kind === 'pending') {
+                showToast('info', 'Onay Bekleniyor', 'Hesabınız yeniden onay sürecinde.');
+            }
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const isRejected = String(userInfo?.approval_status || '').toLowerCase() === 'rejected';

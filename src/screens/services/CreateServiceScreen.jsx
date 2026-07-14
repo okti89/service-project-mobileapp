@@ -531,7 +531,9 @@ export default function CreateServiceScreen({ route, navigation }) {
                             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Kayıtlı müşteri</Text>
                             <Pressable onPress={() => setShowCustomerPicker(true)} style={({ pressed }) => [styles.customerPicker, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.92 : 1 }]}>
                                 <View style={styles.customerPickerLeft}>
-                                    <View style={styles.customerAvatar}><Text style={styles.customerAvatarText}>{getInitials(form.customer?.full_name)}</Text></View>
+                                    <View style={styles.customerAvatar}>
+                                        {form.customer?.full_name ? <Text style={styles.customerAvatarText}>{getInitials(form.customer.full_name)}</Text> : <MaterialCommunityIcons name="account-search-outline" size={20} color={serviceBlue} />}
+                                    </View>
                                     <View style={styles.customerPickerTextWrap}>
                                         <Text style={[styles.customerPickerLabel, { color: colors.textSecondary }]}>Kayıtlı müşteri seç</Text>
                                         <Text style={[styles.customerPickerValue, { color: form.customer?.full_name ? colors.text : colors.textTertiary }]} numberOfLines={1}>{form.customer?.full_name || 'Listeden müşteri seçin'}</Text>
