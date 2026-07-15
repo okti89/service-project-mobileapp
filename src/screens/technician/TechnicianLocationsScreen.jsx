@@ -436,34 +436,33 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
                     {markers}
                 </MapView>
 
-                <View style={[styles.floatingMetrics, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}>
-                    <View style={styles.metricItem}>
-                        <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>TOPLAM YOL</Text>
-                        <Text style={[styles.metricVal, { color: colors.text }]}>
-                            {totalDistance > 0 ? `${totalDistance.toFixed(2)} km` : '0 km'}
-                        </Text>
-                    </View>
-                    <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
-                    <View style={styles.metricItem}>
-                        <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>KONUM SAYISI</Text>
-                        <Text style={[styles.metricVal, { color: colors.text }]}>{locations.length}</Text>
+                <View style={[styles.trackingSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.shadow }]}>
+                    {isLiveMode && (
+                        <>
+                            <View style={styles.liveTrackerHeader}>
+                                <View style={styles.liveTrackerTitleRow}>
+                                    <View style={[styles.liveDot, { backgroundColor: lastLocation && dayjs().diff(dayjs(lastLocation.created_at), 'minute') <= 15 ? serviceGreen : serviceOrange }]} />
+                                    <Text style={[styles.liveTrackerTitle, { color: colors.text }]}>Canlı takip</Text>
+                                </View>
+                                <Text style={[styles.liveTrackerRefresh, { color: colors.textTertiary }]}>Yenilendi {lastRefreshedAt ? dayjs(lastRefreshedAt).format('HH:mm') : '--:--'}</Text>
+                            </View>
+                            <Text style={[styles.liveTrackerTime, { color: colors.text }]}>Son konum: {lastLocation ? dayjs(lastLocation.created_at).format('HH:mm') : 'Henüz konum yok'}</Text>
+                            {lastLocation ? <Text style={[styles.liveTrackerAddress, { color: colors.textSecondary }]} numberOfLines={1}>{buildDisplayAddress(lastLocation, resolvedAddresses)}</Text> : null}
+                            <View style={[styles.liveDivider, { backgroundColor: colors.border }]} />
+                        </>
+                    )}
+                    <View style={styles.trackingMetricsRow}>
+                        <View style={styles.metricItem}>
+                            <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>TOPLAM YOL</Text>
+                            <Text style={[styles.metricVal, { color: colors.text }]}>{totalDistance > 0 ? `${totalDistance.toFixed(2)} km` : '0 km'}</Text>
+                        </View>
+                        <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.metricItem}>
+                            <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>KONUM SAYISI</Text>
+                            <Text style={[styles.metricVal, { color: colors.text }]}>{locations.length}</Text>
+                        </View>
                     </View>
                 </View>
-
-                {isLiveMode && (
-                    <View style={[styles.liveTrackerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <View style={styles.liveTrackerHeader}>
-                            <View style={styles.liveTrackerTitleRow}>
-                                <View style={[styles.liveDot, { backgroundColor: lastLocation && dayjs().diff(dayjs(lastLocation.created_at), 'minute') <= 15 ? serviceGreen : serviceOrange }]} />
-                                <Text style={[styles.liveTrackerTitle, { color: colors.text }]}>Canlı takip</Text>
-                            </View>
-                            <Text style={[styles.liveTrackerRefresh, { color: colors.textTertiary }]}>Yenilendi {lastRefreshedAt ? dayjs(lastRefreshedAt).format('HH:mm') : '--:--'}</Text>
-                        </View>
-                        <Text style={[styles.liveTrackerTime, { color: colors.text }]}>Son konum: {lastLocation ? dayjs(lastLocation.created_at).format('HH:mm') : 'Henüz konum yok'}</Text>
-                        {lastLocation ? <Text style={[styles.liveTrackerAddress, { color: colors.textSecondary }]} numberOfLines={1}>{buildDisplayAddress(lastLocation, resolvedAddresses)}</Text> : null}
-                    </View>
-                )}
-
                 <Pressable
                     onPress={onOpenRouteHistory}
                     style={({ pressed }) => [
@@ -1443,22 +1442,19 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 18,
     },
-    floatingMetrics: {
+    trackingSummaryCard: {
         position: 'absolute',
         top: 16,
         left: 16,
         right: 16,
+        borderWidth: 1,
         borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
+        padding: 12,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 4,
     },
-    liveTrackerCard: { position: 'absolute', top: 92, left: 16, right: 16, borderWidth: 1, borderRadius: 14, padding: 12 },
     liveTrackerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 },
     liveTrackerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     liveDot: { width: 8, height: 8, borderRadius: 4 },
@@ -1466,6 +1462,8 @@ const styles = StyleSheet.create({
     liveTrackerRefresh: { fontSize: 11, fontWeight: '600' },
     liveTrackerTime: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
     liveTrackerAddress: { fontSize: 12, fontWeight: '600' },
+    liveDivider: { height: 1, marginVertical: 10 },
+    trackingMetricsRow: { flexDirection: 'row', alignItems: 'center' },
     metricItem: {
         flex: 1,
         alignItems: 'center',
