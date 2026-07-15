@@ -1628,7 +1628,7 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
                 </View>
                 <Text style={[styles.infoLabel, { color: colors.textSecondary, marginBottom: 8 }]}>Teknisyen İmzası</Text>
                 <Pressable
-                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#fafafa' }]}
+                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: '#FFFFFF' }]}
                     onPress={() => modalAc("teknisyen")}
                 >
                     {teknisyenImza ? (
@@ -1640,7 +1640,7 @@ const ImzaTab = ({ service, signatureData, fetchService, colors, isDark }) => {
 
                 <Text style={[styles.infoLabel, { color: colors.textSecondary, marginTop: 24, marginBottom: 8 }]}>Müşteri İmzası</Text>
                 <Pressable
-                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: isDark ? colors.background : '#fafafa' }]}
+                    style={[styles.imzaKutu, { borderColor: colors.border, backgroundColor: '#FFFFFF' }]}
                     onPress={() => modalAc("musteri")}
                 >
                     {musteriImza ? (

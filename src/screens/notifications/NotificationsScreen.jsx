@@ -132,16 +132,23 @@ const formatGroupLabel = (dateValue) => {
     return date.format('DD MMMM');
 };
 
-const openServiceDetail = (navigation, item) => {
-    if (!item?.related_id) return false;
-
-    try {
-        navigation.navigate('ServiceDetail', { serviceId: item.related_id });
-        return true;
-    } catch (error) {
-        console.log('Notification service navigation error:', error?.message || error);
-        return false;
-    }
+const openRelatedScreen = (navigation, item) => {
+    const screen = String(item?.related_screen || '').replace(/[\s_-]/g, '').toLocaleLowerCase('tr-TR');
+    const relatedId = item?.related_id;
+    const routes = {
+        servicedetail: ['ServiceDetail', relatedId ? { serviceId: relatedId } : undefined],
+        service: ['ServiceDetail', relatedId ? { serviceId: relatedId } : undefined],
+        payroll: ['TechnicianPayrollDetail', relatedId ? { payrollId: relatedId } : undefined],
+        payrolldetail: ['TechnicianPayrollDetail', relatedId ? { payrollId: relatedId } : undefined],
+        myshifts: ['ProfileMyShifts'],
+        profilemyshifts: ['ProfileMyShifts'],
+        userdetail: ['AdminUsers'],
+        dailyservicesummary: ['ServiceList'],
+    };
+    const target = routes[screen];
+    if (!target || (['servicedetail', 'service', 'payroll', 'payrolldetail'].includes(screen) && !relatedId)) return false;
+    navigation.navigate(...target);
+    return true;
 };
 
 function SectionHeader({ label, colors }) {
@@ -325,11 +332,12 @@ export default function NotificationsScreen() {
     }, [updateUnreadCount]);
 
     const handlePress = useCallback((item) => {
+        openRelatedScreen(navigation, item);
         markAsRead(item);
-    }, [markAsRead]);
+    }, [markAsRead, navigation]);
 
     const handleActionPress = useCallback((item) => {
-        openServiceDetail(navigation, item);
+        openRelatedScreen(navigation, item);
         markAsRead(item);
     }, [markAsRead, navigation]);
 
