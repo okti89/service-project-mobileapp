@@ -40,23 +40,23 @@ const LocationDisclosureModal = ({ visible, onAccept, onDecline }) => (
                 <View style={styles.disclosureIcon}>
                     <MaterialCommunityIcons name="map-marker-radius-outline" size={28} color="#1D4ED8" />
                 </View>
-                <Text style={styles.disclosureTitle}>Aktif vardiyada konum takibi</Text>
+                <Text style={styles.disclosureTitle}>Arka plan konum izni</Text>
                 <Text style={styles.disclosureText}>
-                    Mesainiz açıkken, uygulama arka planda olsa da konumunuz servis operasyonlarını takip etmek için güncellenebilir.
+                    Canlı takip için konumunuz, uygulama arka plandayken de aktif mesai boyunca güncellenir.
                 </Text>
                 <Text style={styles.disclosureText}>
-                    Konumunuz yalnızca yetkili firma yöneticileri tarafından görülür. Mesainizi bitirdiğinizde takip durur.
+                    Açılacak izin ekranında “Her zaman izin ver” seçeneğini kullanın. Bu izin verilmezse mesainizi canlı takip olmadan başlatabilirsiniz.
                 </Text>
                 <View style={styles.disclosureNote}>
                     <MaterialCommunityIcons name="information-outline" size={18} color="#475569" />
-                    <Text style={styles.disclosureNoteText}>Devam ettiğinizde konum izni ekranı açılır.</Text>
+                    <Text style={styles.disclosureNoteText}>Mesai bittiğinde arka plan takibi otomatik olarak durur.</Text>
                 </View>
                 <View style={styles.disclosureActions}>
                     <Pressable onPress={onDecline} style={styles.secondaryAction}>
                         <Text style={styles.secondaryActionText}>Şimdi değil</Text>
                     </Pressable>
                     <Pressable onPress={onAccept} style={styles.primaryAction}>
-                        <Text style={styles.primaryActionText}>Devam et</Text>
+                        <Text style={styles.primaryActionText}>Arka Plan İznini Aç</Text>
                     </Pressable>
                 </View>
             </View>
@@ -179,6 +179,23 @@ export const AuthProvider = ({ children }) => {
         const requestedPermission = await Location.requestBackgroundPermissionsAsync();
         return requestedPermission.status === 'granted';
     }, [showLocationDisclosure]);
+    const hasLocationTrackingPermissions = useCallback(async () => {
+        const [foregroundPermission, backgroundPermission] = await Promise.all([
+            Location.getForegroundPermissionsAsync(),
+            Location.getBackgroundPermissionsAsync(),
+        ]);
+        return foregroundPermission.status === 'granted' && backgroundPermission.status === 'granted';
+    }, []);
+
+    const ensureLocationTrackingPermissions = useCallback(async () => {
+        let foregroundPermission = await Location.getForegroundPermissionsAsync();
+        if (foregroundPermission.status !== 'granted') {
+            foregroundPermission = await Location.requestForegroundPermissionsAsync();
+        }
+        if (foregroundPermission.status !== 'granted') return false;
+
+        return requestBackgroundLocationConsent();
+    }, [requestBackgroundLocationConsent]);
     const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false, forceStop = false } = {}) => {
         if (forceStop) {
             // A pending start must not restart tracking after the shift has ended.
@@ -205,18 +222,12 @@ export const AuthProvider = ({ children }) => {
             if (trackingVersion !== locationTrackingVersionRef.current) return;
 
             if (isShiftRunning) {
-                let foregroundPermission = await Location.getForegroundPermissionsAsync();
-                if (foregroundPermission.status !== 'granted' && requestConsent) {
-                    foregroundPermission = await Location.requestForegroundPermissionsAsync();
-                }
-                if (foregroundPermission.status !== 'granted') return;
-
-                const backgroundPermission = await Location.getBackgroundPermissionsAsync();
-                const hasBackgroundConsent = backgroundPermission.status === 'granted'
-                    || (requestConsent && await requestBackgroundLocationConsent());
+                const hasTrackingPermissions = requestConsent
+                    ? await ensureLocationTrackingPermissions()
+                    : await hasLocationTrackingPermissions();
                 if (trackingVersion !== locationTrackingVersionRef.current) return;
 
-                if (hasBackgroundConsent) {
+                if (hasTrackingPermissions) {
                     await startBackgroundLocationTracking();
                     await sendCurrentLocationNow();
                 }
@@ -235,7 +246,7 @@ export const AuthProvider = ({ children }) => {
                 void syncLocationTrackingByShift({ requestConsent: true });
             }
         }
-    }, [canTrackLocationAsTechnician, hasActiveShiftToday, isLoggedIn, requestBackgroundLocationConsent]);
+    }, [canTrackLocationAsTechnician, ensureLocationTrackingPermissions, hasActiveShiftToday, hasLocationTrackingPermissions, isLoggedIn]);
 
     const register = useCallback(async (
         email,
@@ -534,10 +545,14 @@ export const AuthProvider = ({ children }) => {
         deleteAccount,
         checkAuth,
         completeOnboarding,
+        ensureLocationTrackingPermissions,
+        hasLocationTrackingPermissions,
         syncLocationTrackingByShift,
     }), [
         checkAuth,
         completeOnboarding,
+        ensureLocationTrackingPermissions,
+        hasLocationTrackingPermissions,
         isAdmin,
         canTrackLocationAsTechnician,
         isFirstLaunch,

@@ -43,7 +43,7 @@ import { typography } from "@/theme/typography";
 
 export default function HomeScreen({ navigation }) {
     const { colors, isDark } = useTheme();
-    const { userInfo, isAdmin, syncLocationTrackingByShift } = useAuth();
+    const { userInfo, isAdmin, syncLocationTrackingByShift, hasLocationTrackingPermissions, ensureLocationTrackingPermissions } = useAuth();
     const { unreadCount, updateUnreadCount } = useNotifications() || { unreadCount: 0 };
     const { config } = useConfig();
     const { showToast } = useToast();
@@ -63,7 +63,9 @@ export default function HomeScreen({ navigation }) {
     // Shift action loader state
     const [shiftActionLoading, setShiftActionLoading] = useState(false);
     const [shiftConfirmVisible, setShiftConfirmVisible] = useState(false);
+    const [shiftStartOptionsVisible, setShiftStartOptionsVisible] = useState(false);
     const shiftConfirmRef = useRef(null);
+    const shiftStartOptionsRef = useRef(null);
 
     // Service Actions Sheet state
     const [selectedService, setSelectedService] = useState(null);
@@ -154,6 +156,34 @@ export default function HomeScreen({ navigation }) {
         return 'İyi Akşamlar';
     };
 
+    const startShift = async ({ enableLocationTracking }) => {
+        setShiftStartOptionsVisible(false);
+
+        if (enableLocationTracking) {
+            const permissionsGranted = await ensureLocationTrackingPermissions();
+            if (!permissionsGranted) {
+                showToast('info', 'Canlı Takip Açılmadı', 'İzin verilmedi. Mesainizi konum paylaşmadan başlatabilirsiniz.');
+                setShiftStartOptionsVisible(true);
+                return;
+            }
+        }
+
+        try {
+            setShiftActionLoading(true);
+            await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
+            if (enableLocationTracking) {
+                void syncLocationTrackingByShift();
+            } else {
+                await syncLocationTrackingByShift({ forceStop: true });
+            }
+            showToast('success', 'Mesai Başladı', 'Mesainiz başarıyla başlatıldı.');
+            fetchData();
+        } catch (err) {
+            showToast('error', 'Hata', err?.response?.data?.detail || 'Mesai başlatılamadı.');
+        } finally {
+            setShiftActionLoading(false);
+        }
+    };
     // Toggle shift start / stop
     const handleToggleShift = async () => {
         if (shiftState.isActiveToday) {
@@ -164,17 +194,11 @@ export default function HomeScreen({ navigation }) {
                 setShiftWarningVisible(true);
                 return;
             }
-            // Başlat
-            try {
-                setShiftActionLoading(true);
-                await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
-                void syncLocationTrackingByShift({ requestConsent: true });
-                showToast('success', 'Mesai Başladı', 'Mesainiz başarıyla başlatıldı.');
-                fetchData();
-            } catch (err) {
-                showToast('error', 'Hata', err?.response?.data?.detail || 'Mesai başlatılamadı.');
-            } finally {
-                setShiftActionLoading(false);
+            const trackingPermissionsReady = await hasLocationTrackingPermissions();
+            if (trackingPermissionsReady) {
+                await startShift({ enableLocationTracking: true });
+            } else {
+                setShiftStartOptionsVisible(true);
             }
         }
     };
@@ -766,6 +790,38 @@ export default function HomeScreen({ navigation }) {
                         </View>
                     </View>
                 </AppBottomSheet>
+
+                <AppBottomSheet
+                    ref={shiftStartOptionsRef}
+                    visible={shiftStartOptionsVisible}
+                    onClose={() => setShiftStartOptionsVisible(false)}
+                    snapPoints={['48%']}
+                >
+                    <View style={styles.sheetContainer}>
+                        <View style={styles.sheetHeader}>
+                            <MaterialCommunityIcons name="map-marker-radius-outline" size={28} color="#2563EB" />
+                            <Text style={[styles.sheetTitle, { color: colors.text }]}>Mesai ve Canlı Takip</Text>
+                        </View>
+                        <Text style={[styles.sheetDesc, { color: colors.textSecondary }]}>
+                            Mesainizi konum paylaşmadan da başlatabilirsiniz. Canlı takip için önce konum, ardından arka planda konum izni gerekir. Takip yalnızca aktif mesainiz boyunca çalışır.
+                        </Text>
+                        <View style={styles.sheetActions}>
+                            <Pressable
+                                onPress={() => startShift({ enableLocationTracking: false })}
+                                style={({ pressed }) => [styles.cancelBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+                            >
+                                <Text style={[styles.cancelBtnText, { color: colors.text }]}>Sadece Mesaiyi Başlat</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => startShift({ enableLocationTracking: true })}
+                                style={({ pressed }) => [styles.locationStartBtn, { opacity: pressed ? 0.85 : 1 }]}
+                            >
+                                <Text style={styles.locationStartBtnText}>Canlı Takibi Aç</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </AppBottomSheet>
+
 
                 <AppBottomSheet
                     ref={shiftConfirmRef}
@@ -1480,6 +1536,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     cancelBtnText: {
+        fontSize: fs(13),
+        fontWeight: '700',
+    },
+    locationStartBtn: {
+        flex: 1,
+        height: sp(44),
+        borderRadius: sp(12),
+        backgroundColor: '#2563EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    locationStartBtnText: {
+        color: '#FFFFFF',
         fontSize: fs(13),
         fontWeight: '700',
     },
