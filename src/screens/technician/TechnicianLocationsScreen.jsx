@@ -285,6 +285,9 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
     onLocationPress,
     selectedLocationId,
     resolvedAddresses,
+    isLiveMode,
+    lastLocation,
+    lastRefreshedAt,
 }) {
     const provider = useMemo(() => getMapProvider(), []);
 
@@ -447,6 +450,20 @@ const TechnicianMapSection = memo(function TechnicianMapSection({
                     </View>
                 </View>
 
+                {isLiveMode && (
+                    <View style={[styles.liveTrackerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <View style={styles.liveTrackerHeader}>
+                            <View style={styles.liveTrackerTitleRow}>
+                                <View style={[styles.liveDot, { backgroundColor: lastLocation && dayjs().diff(dayjs(lastLocation.created_at), 'minute') <= 15 ? serviceGreen : serviceOrange }]} />
+                                <Text style={[styles.liveTrackerTitle, { color: colors.text }]}>Canlı takip</Text>
+                            </View>
+                            <Text style={[styles.liveTrackerRefresh, { color: colors.textTertiary }]}>Yenilendi {lastRefreshedAt ? dayjs(lastRefreshedAt).format('HH:mm') : '--:--'}</Text>
+                        </View>
+                        <Text style={[styles.liveTrackerTime, { color: colors.text }]}>Son konum: {lastLocation ? dayjs(lastLocation.created_at).format('HH:mm') : 'Henüz konum yok'}</Text>
+                        {lastLocation ? <Text style={[styles.liveTrackerAddress, { color: colors.textSecondary }]} numberOfLines={1}>{buildDisplayAddress(lastLocation, resolvedAddresses)}</Text> : null}
+                    </View>
+                )}
+
                 <Pressable
                     onPress={onOpenRouteHistory}
                     style={({ pressed }) => [
@@ -482,6 +499,8 @@ export default function TechnicianLocationsScreen({ navigation, route }) {
 
     // States
     const [selectedDate, setSelectedDate] = useState(dayjs());
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     const [technicians, setTechnicians] = useState([]);
@@ -563,6 +582,7 @@ export default function TechnicianLocationsScreen({ navigation, route }) {
 
                 setLocations(parsed);
                 setResolvedAddresses(new Map());
+                setLastRefreshedAt(new Date());
 
                 if (parsed.length >= 2) {
                     fetchDrivingRoute(parsed);
@@ -578,7 +598,16 @@ export default function TechnicianLocationsScreen({ navigation, route }) {
         };
 
         fetchLocations();
-    }, [selectedTechnician, selectedDate]);
+    }, [refreshKey, selectedTechnician, selectedDate]);
+
+    const isLiveMode = selectedDate.isSame(dayjs(), 'day');
+    const lastLocation = locations[locations.length - 1] || null;
+
+    useEffect(() => {
+        if (!selectedTechnician || !isLiveMode) return undefined;
+        const refreshTimer = setInterval(() => setRefreshKey((value) => value + 1), 30000);
+        return () => clearInterval(refreshTimer);
+    }, [isLiveMode, selectedTechnician]);
 
     // Eksi adresli lokasyonlar icin arka planda reverse geocoding (kotasiz, OS native).
     // Zaten adres string'i olan veya cache'te bulunan kayitlar icin tekrar cagri yapilmaz.
@@ -931,6 +960,7 @@ export default function TechnicianLocationsScreen({ navigation, route }) {
                 </Pressable>
                 <View style={styles.headerTitleContainer}>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>Teknisyen Konumları</Text>
+                    <Text style={[styles.headerSub, { color: colors.textSecondary }]}>{isLiveMode ? "Canlı takip - 30 sn'de bir yenilenir" : "Seçilen günün rota geçmişi"}</Text>
                 </View>
             </View>
 
@@ -986,6 +1016,9 @@ export default function TechnicianLocationsScreen({ navigation, route }) {
                 onLocationPress={handleMapLocationPress}
                 selectedLocationId={selectedLocationId}
                 resolvedAddresses={resolvedAddresses}
+                isLiveMode={isLiveMode}
+                lastLocation={lastLocation}
+                lastRefreshedAt={lastRefreshedAt}
             />
             {false && (
                 <View style={styles.mapWrapper}>
@@ -1425,6 +1458,14 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
+    liveTrackerCard: { position: 'absolute', top: 92, left: 16, right: 16, borderWidth: 1, borderRadius: 14, padding: 12 },
+    liveTrackerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 },
+    liveTrackerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    liveDot: { width: 8, height: 8, borderRadius: 4 },
+    liveTrackerTitle: { fontSize: 13, fontWeight: '800' },
+    liveTrackerRefresh: { fontSize: 11, fontWeight: '600' },
+    liveTrackerTime: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+    liveTrackerAddress: { fontSize: 12, fontWeight: '600' },
     metricItem: {
         flex: 1,
         alignItems: 'center',
