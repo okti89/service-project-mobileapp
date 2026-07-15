@@ -50,7 +50,7 @@ const LocationDisclosureModal = ({ visible, onAccept, onDecline }) => (
                 </Text>
                 <View style={styles.disclosureNote}>
                     <MaterialCommunityIcons name="information-outline" size={18} color="#475569" />
-                    <Text style={styles.disclosureNoteText}>Devam ettiğinizde Android konum izni ekranı açılır.</Text>
+                    <Text style={styles.disclosureNoteText}>Devam ettiğinizde konum izni ekranı açılır.</Text>
                 </View>
                 <View style={styles.disclosureActions}>
                     <Pressable onPress={onDecline} style={styles.secondaryAction}>
