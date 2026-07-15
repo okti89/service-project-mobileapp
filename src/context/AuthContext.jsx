@@ -27,7 +27,6 @@ const ONBOARDING_VERSION = 'v1';
 const ONBOARDING_VERSION_KEY = 'onboarding_version_seen';
 const TENANT_CODE_KEY = 'tenant_code';
 const AUTH_CHECK_TIMEOUT_MS = 4000;
-const BACKGROUND_LOCATION_DISCLOSURE_KEY = 'background_location_disclosure_v1';
 const EMPTY_PERMISSIONS = Object.freeze({});
 const LocationDisclosureModal = ({ visible, onAccept, onDecline }) => (
     <Modal
@@ -171,16 +170,15 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const requestBackgroundLocationConsent = useCallback(async () => {
-        const disclosureKey = BACKGROUND_LOCATION_DISCLOSURE_KEY + ':' + (userInfo?.id || 'unknown');
         const backgroundPermission = await Location.getBackgroundPermissionsAsync();
         if (backgroundPermission.status === 'granted') return true;
 
         const accepted = await showLocationDisclosure();
         if (!accepted) return false;
 
-        await AsyncStorage.setItem(disclosureKey, 'accepted');
-        return true;
-    }, [showLocationDisclosure, userInfo?.id]);
+        const requestedPermission = await Location.requestBackgroundPermissionsAsync();
+        return requestedPermission.status === 'granted';
+    }, [showLocationDisclosure]);
     const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false, forceStop = false } = {}) => {
         if (forceStop) {
             // A pending start must not restart tracking after the shift has ended.
@@ -207,19 +205,20 @@ export const AuthProvider = ({ children }) => {
             if (trackingVersion !== locationTrackingVersionRef.current) return;
 
             if (isShiftRunning) {
+                let foregroundPermission = await Location.getForegroundPermissionsAsync();
+                if (foregroundPermission.status !== 'granted' && requestConsent) {
+                    foregroundPermission = await Location.requestForegroundPermissionsAsync();
+                }
+                if (foregroundPermission.status !== 'granted') return;
+
                 const backgroundPermission = await Location.getBackgroundPermissionsAsync();
                 const hasBackgroundConsent = backgroundPermission.status === 'granted'
                     || (requestConsent && await requestBackgroundLocationConsent());
                 if (trackingVersion !== locationTrackingVersionRef.current) return;
 
                 if (hasBackgroundConsent) {
-                    await startBackgroundLocationTracking({ hasDisclosureConsent: true });
+                    await startBackgroundLocationTracking();
                     await sendCurrentLocationNow();
-                } else {
-                    const foregroundPermission = await Location.getForegroundPermissionsAsync();
-                    if (foregroundPermission.status === 'granted') {
-                        await sendCurrentLocationNow();
-                    }
                 }
             } else {
                 await stopBackgroundLocationTracking();
