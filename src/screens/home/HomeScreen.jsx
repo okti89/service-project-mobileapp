@@ -168,7 +168,7 @@ export default function HomeScreen({ navigation }) {
             try {
                 setShiftActionLoading(true);
                 await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
-                await syncLocationTrackingByShift({ requestConsent: true });
+                void syncLocationTrackingByShift({ requestConsent: true });
                 showToast('success', 'Mesai Başladı', 'Mesainiz başarıyla başlatıldı.');
                 fetchData();
             } catch (err) {
