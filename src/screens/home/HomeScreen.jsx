@@ -184,7 +184,7 @@ export default function HomeScreen({ navigation }) {
             setShiftConfirmVisible(false);
             setShiftActionLoading(true);
             await api.post(ENDPOINTS.TECHNICIAN.SHIFT_STOP);
-            await syncLocationTrackingByShift();
+            await syncLocationTrackingByShift({ forceStop: true });
             showToast('success', 'Mesai Bitti', 'Mesainiz başarıyla sonlandırıldı.');
             fetchData();
         } catch (err) {
@@ -747,7 +747,7 @@ export default function HomeScreen({ navigation }) {
                                         setShiftWarningVisible(false);
                                         setShiftActionLoading(true);
                                         await api.post(ENDPOINTS.TECHNICIAN.SHIFT_STOP);
-                                        await syncLocationTrackingByShift();
+                                        await syncLocationTrackingByShift({ forceStop: true });
                                         showToast('success', 'Mesai Kapatıldı', 'Açık mesai kaydınız kapatıldı.');
                                         fetchData();
                                     } catch (err) {

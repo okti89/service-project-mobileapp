@@ -110,6 +110,7 @@ export const AuthProvider = ({ children }) => {
 
     const syncingRef = useRef(false);
     const pendingLocationConsentRef = useRef(false);
+    const locationTrackingVersionRef = useRef(0);
     const authHydratedRef = useRef(false);
     const locationDisclosureResolverRef = useRef(null);
 
@@ -180,13 +181,22 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem(disclosureKey, 'accepted');
         return true;
     }, [showLocationDisclosure, userInfo?.id]);
-    const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false } = {}) => {
+    const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false, forceStop = false } = {}) => {
+        if (forceStop) {
+            // A pending start must not restart tracking after the shift has ended.
+            locationTrackingVersionRef.current += 1;
+            pendingLocationConsentRef.current = false;
+            await stopBackgroundLocationTracking();
+            return;
+        }
+
         if (syncingRef.current) {
             pendingLocationConsentRef.current = pendingLocationConsentRef.current || requestConsent;
             return;
         }
 
         syncingRef.current = true;
+        const trackingVersion = locationTrackingVersionRef.current;
         try {
             if (!isLoggedIn || !canTrackLocationAsTechnician) {
                 await stopBackgroundLocationTracking();
@@ -194,10 +204,14 @@ export const AuthProvider = ({ children }) => {
             }
 
             const isShiftRunning = await hasActiveShiftToday();
+            if (trackingVersion !== locationTrackingVersionRef.current) return;
+
             if (isShiftRunning) {
                 const backgroundPermission = await Location.getBackgroundPermissionsAsync();
                 const hasBackgroundConsent = backgroundPermission.status === 'granted'
                     || (requestConsent && await requestBackgroundLocationConsent());
+                if (trackingVersion !== locationTrackingVersionRef.current) return;
+
                 if (hasBackgroundConsent) {
                     await startBackgroundLocationTracking({ hasDisclosureConsent: true });
                     await sendCurrentLocationNow();
