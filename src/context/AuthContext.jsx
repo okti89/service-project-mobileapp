@@ -187,7 +187,7 @@ export const AuthProvider = ({ children }) => {
         const permission = await Location.requestBackgroundPermissionsAsync();
         return permission.status === 'granted';
     }, [showLocationDisclosure, userInfo?.id]);
-    const syncLocationTrackingByShift = useCallback(async () => {
+    const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false } = {}) => {
         if (syncingRef.current) return;
 
         syncingRef.current = true;
@@ -200,7 +200,9 @@ export const AuthProvider = ({ children }) => {
             const isShiftRunning = await hasActiveShiftToday();
             if (isShiftRunning) {
                 await sendCurrentLocationNow();
-                const hasBackgroundConsent = await requestBackgroundLocationConsent();
+                const backgroundPermission = await Location.getBackgroundPermissionsAsync();
+                const hasBackgroundConsent = backgroundPermission.status === 'granted'
+                    || (requestConsent && await requestBackgroundLocationConsent());
                 if (hasBackgroundConsent) {
                     await startBackgroundLocationTracking({ hasDisclosureConsent: true });
                 }
@@ -543,8 +545,8 @@ export const AuthProvider = ({ children }) => {
 };
 
 const styles = StyleSheet.create({
-    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.56)', padding: 16 },
-    disclosureCard: { backgroundColor: '#FFFFFF', borderRadius: 26, padding: 24, paddingBottom: 18 },
+    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.56)', padding: 24 },
+    disclosureCard: { width: '100%', maxWidth: 440, backgroundColor: '#FFFFFF', borderRadius: 26, padding: 24, paddingBottom: 18 },
     disclosureIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DBEAFE', marginBottom: 16 },
     disclosureTitle: { color: '#0F172A', fontSize: 21, fontWeight: '800', letterSpacing: -0.35, marginBottom: 10 },
     disclosureText: { color: '#475569', fontSize: 15, lineHeight: 22, marginBottom: 10 },
