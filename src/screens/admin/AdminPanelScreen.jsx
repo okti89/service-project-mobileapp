@@ -156,8 +156,7 @@ const PERMISSION_ITEM_MAP = {
 
 const MENU_CATEGORIES = [
     { key: 'users', label: 'Kullanıcı ve Ekip Yönetimi', items: ['users-list', 'users-pending', 'technicians-list'] },
-    { key: 'services', label: 'Servis Yönetimi', items: ['services'] },
-    { key: 'field', label: 'Saha ve Operasyon', items: ['technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
+    { key: 'field', label: 'Saha ve Operasyon', items: ['services', 'technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
     { key: 'finance', label: 'Finans ve Muhasebe', items: ['finance-payroll', 'finance-accounting'] },
     { key: 'customer_inventory', label: 'Müşteri ve Envanter', items: ['customers-list', 'inventory'] },
     { key: 'system', label: 'Sistem Yönetimi', items: ['notifications', 'reports', 'company-settings'] }
