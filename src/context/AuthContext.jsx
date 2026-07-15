@@ -174,19 +174,11 @@ export const AuthProvider = ({ children }) => {
         const backgroundPermission = await Location.getBackgroundPermissionsAsync();
         if (backgroundPermission.status === 'granted') return true;
 
-        const previouslyAccepted = await AsyncStorage.getItem(disclosureKey);
-        if (previouslyAccepted === 'accepted') {
-            const permission = await Location.requestBackgroundPermissionsAsync();
-            return permission.status === 'granted';
-        }
-
         const accepted = await showLocationDisclosure();
-
         if (!accepted) return false;
 
         await AsyncStorage.setItem(disclosureKey, 'accepted');
-        const permission = await Location.requestBackgroundPermissionsAsync();
-        return permission.status === 'granted';
+        return true;
     }, [showLocationDisclosure, userInfo?.id]);
     const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false } = {}) => {
         if (syncingRef.current) {
@@ -203,12 +195,17 @@ export const AuthProvider = ({ children }) => {
 
             const isShiftRunning = await hasActiveShiftToday();
             if (isShiftRunning) {
-                await sendCurrentLocationNow();
                 const backgroundPermission = await Location.getBackgroundPermissionsAsync();
                 const hasBackgroundConsent = backgroundPermission.status === 'granted'
                     || (requestConsent && await requestBackgroundLocationConsent());
                 if (hasBackgroundConsent) {
                     await startBackgroundLocationTracking({ hasDisclosureConsent: true });
+                    await sendCurrentLocationNow();
+                } else {
+                    const foregroundPermission = await Location.getForegroundPermissionsAsync();
+                    if (foregroundPermission.status === 'granted') {
+                        await sendCurrentLocationNow();
+                    }
                 }
             } else {
                 await stopBackgroundLocationTracking();
