@@ -7,7 +7,8 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import { Alert, AppState, DeviceEventEmitter } from 'react-native';
+import { AppState, DeviceEventEmitter, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -28,6 +29,41 @@ const TENANT_CODE_KEY = 'tenant_code';
 const AUTH_CHECK_TIMEOUT_MS = 4000;
 const BACKGROUND_LOCATION_DISCLOSURE_KEY = 'background_location_disclosure_v1';
 const EMPTY_PERMISSIONS = Object.freeze({});
+const LocationDisclosureModal = ({ visible, onAccept, onDecline }) => (
+    <Modal
+        animationType="fade"
+        transparent
+        visible={visible}
+        onRequestClose={onDecline}
+    >
+        <View style={styles.modalOverlay}>
+            <View style={styles.disclosureCard}>
+                <View style={styles.disclosureIcon}>
+                    <MaterialCommunityIcons name="map-marker-radius-outline" size={28} color="#1D4ED8" />
+                </View>
+                <Text style={styles.disclosureTitle}>Aktif vardiyada konum takibi</Text>
+                <Text style={styles.disclosureText}>
+                    Mesainiz açıkken, uygulama arka planda olsa da konumunuz servis operasyonlarını takip etmek için güncellenebilir.
+                </Text>
+                <Text style={styles.disclosureText}>
+                    Konumunuz yalnızca yetkili firma yöneticileri tarafından görülür. Mesainizi bitirdiğinizde takip durur.
+                </Text>
+                <View style={styles.disclosureNote}>
+                    <MaterialCommunityIcons name="information-outline" size={18} color="#475569" />
+                    <Text style={styles.disclosureNoteText}>Devam ettiğinizde Android konum izni ekranı açılır.</Text>
+                </View>
+                <View style={styles.disclosureActions}>
+                    <Pressable onPress={onDecline} style={styles.secondaryAction}>
+                        <Text style={styles.secondaryActionText}>Şimdi değil</Text>
+                    </Pressable>
+                    <Pressable onPress={onAccept} style={styles.primaryAction}>
+                        <Text style={styles.primaryActionText}>Devam et</Text>
+                    </Pressable>
+                </View>
+            </View>
+        </View>
+    </Modal>
+);
 
 const formatDateForApi = (date = new Date()) => {
     const year = date.getFullYear();
@@ -70,9 +106,26 @@ export const AuthProvider = ({ children }) => {
     const [userInfo, setUserInfo] = useState(null);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isFirstLaunch, setIsFirstLaunch] = useState(true);
+    const [isLocationDisclosureVisible, setIsLocationDisclosureVisible] = useState(false);
 
     const syncingRef = useRef(false);
     const authHydratedRef = useRef(false);
+    const locationDisclosureResolverRef = useRef(null);
+
+    const resolveLocationDisclosure = useCallback((accepted) => {
+        setIsLocationDisclosureVisible(false);
+        locationDisclosureResolverRef.current?.(accepted);
+        locationDisclosureResolverRef.current = null;
+    }, []);
+
+    const showLocationDisclosure = useCallback(() => new Promise((resolve) => {
+        locationDisclosureResolverRef.current = resolve;
+        setIsLocationDisclosureVisible(true);
+    }), []);
+
+    useEffect(() => () => {
+        locationDisclosureResolverRef.current?.(false);
+    }, []);
 
     const applyAuthState = useCallback(({ token = null, user = null, loggedIn = false }) => {
         setUserToken(token);
@@ -126,23 +179,14 @@ export const AuthProvider = ({ children }) => {
             return permission.status === 'granted';
         }
 
-        const accepted = await new Promise((resolve) => {
-            Alert.alert(
-                'Arka Planda Konum Takibi',
-                'Aktif vardiyanız sırasında Servis Asistanı, uygulama ekranda değilken konumunuzu en fazla 10 dakikada bir veya 1 kilometre hareket ettiğinizde servis sistemine gönderir. Bu veri yalnızca yetkili yöneticilerin aktif saha görevini takip etmesi için kullanılır; reklam veya profil oluşturma amacıyla kullanılmaz.',
-                [
-                    { text: 'Şimdi Değil', style: 'cancel', onPress: () => resolve(false) },
-                    { text: 'Devam Et', onPress: () => resolve(true) },
-                ],
-                { cancelable: false },
-            );
-        });
+        const accepted = await showLocationDisclosure();
+
         if (!accepted) return false;
 
         await AsyncStorage.setItem(disclosureKey, 'accepted');
         const permission = await Location.requestBackgroundPermissionsAsync();
         return permission.status === 'granted';
-    }, [userInfo?.id]);
+    }, [showLocationDisclosure, userInfo?.id]);
     const syncLocationTrackingByShift = useCallback(async () => {
         if (syncingRef.current) return;
 
@@ -489,9 +533,29 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={value}>
             {children}
+            <LocationDisclosureModal
+                visible={isLocationDisclosureVisible}
+                onAccept={() => resolveLocationDisclosure(true)}
+                onDecline={() => resolveLocationDisclosure(false)}
+            />
         </AuthContext.Provider>
     );
 };
+
+const styles = StyleSheet.create({
+    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.56)', padding: 16 },
+    disclosureCard: { backgroundColor: '#FFFFFF', borderRadius: 26, padding: 24, paddingBottom: 18 },
+    disclosureIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DBEAFE', marginBottom: 16 },
+    disclosureTitle: { color: '#0F172A', fontSize: 21, fontWeight: '800', letterSpacing: -0.35, marginBottom: 10 },
+    disclosureText: { color: '#475569', fontSize: 15, lineHeight: 22, marginBottom: 10 },
+    disclosureNote: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, marginTop: 4 },
+    disclosureNoteText: { flex: 1, color: '#475569', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+    disclosureActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+    secondaryAction: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 13, backgroundColor: '#F1F5F9' },
+    secondaryActionText: { color: '#334155', fontSize: 15, fontWeight: '800' },
+    primaryAction: { flex: 1.2, alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 13, backgroundColor: '#2563EB' },
+    primaryActionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+});
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
