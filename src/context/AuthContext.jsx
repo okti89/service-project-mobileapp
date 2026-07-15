@@ -109,6 +109,7 @@ export const AuthProvider = ({ children }) => {
     const [isLocationDisclosureVisible, setIsLocationDisclosureVisible] = useState(false);
 
     const syncingRef = useRef(false);
+    const pendingLocationConsentRef = useRef(false);
     const authHydratedRef = useRef(false);
     const locationDisclosureResolverRef = useRef(null);
 
@@ -188,7 +189,10 @@ export const AuthProvider = ({ children }) => {
         return permission.status === 'granted';
     }, [showLocationDisclosure, userInfo?.id]);
     const syncLocationTrackingByShift = useCallback(async ({ requestConsent = false } = {}) => {
-        if (syncingRef.current) return;
+        if (syncingRef.current) {
+            pendingLocationConsentRef.current = pendingLocationConsentRef.current || requestConsent;
+            return;
+        }
 
         syncingRef.current = true;
         try {
@@ -216,6 +220,10 @@ export const AuthProvider = ({ children }) => {
             );
         } finally {
             syncingRef.current = false;
+            if (pendingLocationConsentRef.current) {
+                pendingLocationConsentRef.current = false;
+                void syncLocationTrackingByShift({ requestConsent: true });
+            }
         }
     }, [canTrackLocationAsTechnician, hasActiveShiftToday, isLoggedIn, requestBackgroundLocationConsent]);
 
