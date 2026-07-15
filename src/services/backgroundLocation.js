@@ -157,21 +157,23 @@ export async function startBackgroundLocationTracking({ hasDisclosureConsent = f
     try {
         const isRunning = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
         if (isRunning) {
-            console.log('[BG Location] Already running, stopping first to apply new settings.');
-            try {
-                await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
-            } catch (error) {
-                if (!isMissingBackgroundTaskError(error)) throw error;
-            }
+            console.log('[BG Location] Already running.');
+            return true;
         }
 
-        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        let { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
+            ({ status: fgStatus } = await Location.requestForegroundPermissionsAsync());
+        }
         if (fgStatus !== 'granted') {
             console.log('[BG Location] Foreground permission denied.');
             return;
         }
 
-        const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+        let { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+        if (bgStatus !== 'granted') {
+            ({ status: bgStatus } = await Location.requestBackgroundPermissionsAsync());
+        }
         if (bgStatus !== 'granted') {
             console.log('[BG Location] Background permission denied.');
             return;
@@ -192,8 +194,9 @@ export async function startBackgroundLocationTracking({ hasDisclosureConsent = f
         });
 
         await sendCurrentLocationNow();
+        const started = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
         console.log('[BG Location] Background tracking started.');
-        return true;
+        return started;
     } catch (error) {
         console.error('[BG Location] Failed to start:', error);
         return false;

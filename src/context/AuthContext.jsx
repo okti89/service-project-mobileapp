@@ -476,6 +476,11 @@ export const AuthProvider = ({ children }) => {
                     await api.post(ENDPOINTS.TECHNICIAN.STATUS, { is_online: isOnline });
                     if (isOnline) {
                         await syncLocationTrackingByShift();
+                        // Android may apply a settings-screen permission change after the activity resumes.
+                        setTimeout(() => {
+                            void syncLocationTrackingByShift();
+                        }, 900);
+
                     }
                 } catch (error) {
                     console.log('Failed to update online status:', error);
