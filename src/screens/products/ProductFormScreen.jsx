@@ -108,8 +108,7 @@ export default function ProductFormScreen({ navigation, route }) {
         let result;
         const options = {
             mediaTypes: ImagePicker.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
+            allowsEditing: false,
             quality: 0.8,
         };
 

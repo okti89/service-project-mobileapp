@@ -111,8 +111,7 @@ export default function ProfileEditScreen({ navigation }) {
 
         const options = {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
+            allowsEditing: false,
             quality: 0.85,
         };
 
