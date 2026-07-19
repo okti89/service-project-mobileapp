@@ -94,7 +94,7 @@ export default function AdminCreateUserScreen({ navigation }) {
         if (!email.trim()) e.email = 'E-posta zorunlu';
         else if (!validateEmail(email)) e.email = 'Geçerli bir e-posta girin';
         if (!phone.trim()) e.phone = 'Telefon zorunlu';
-        else if (normalizePhoneTR(phone).length < 13) e.phone = 'Geçerli bir telefon girin';
+        else if (normalizePhoneTR(phone).length < 11) e.phone = 'Geçerli bir telefon girin';
         if (!password) e.password = 'Şifre zorunlu';
         else if (password.length < 8) e.password = 'En az 8 karakter';
         setErrors(e);
