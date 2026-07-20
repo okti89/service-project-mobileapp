@@ -438,6 +438,7 @@ export const AuthProvider = ({ children }) => {
                         ...parsedStoredUser,
                         approval_status: accountStatus === 'pending' ? 'pending' : accountStatus === 'rejected' ? 'rejected' : parsedStoredUser.approval_status,
                         is_active: accountStatus === 'deactivated' ? false : parsedStoredUser.is_active,
+                        subscription: verifyError?.response?.data?.subscription || parsedStoredUser.subscription,
                     };
                     await AsyncStorage.setItem('user_info', JSON.stringify(gatedUser));
                     applyAuthState({ token, user: gatedUser, loggedIn: true });

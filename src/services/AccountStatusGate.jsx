@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
 import AccountDeactivatedScreen from '@/screens/account-status/AccountDeactivatedScreen';
 import AccountPendingScreen from '@/screens/account-status/AccountPendingScreen';
+import SubscriptionExpiredScreen from '@/screens/account-status/SubscriptionExpiredScreen';
 
 /**
  * Hesap durumunu (aktif/pasif/onay) kontrol eder ve duruma göre uygun
@@ -23,6 +24,9 @@ export default function AccountStatusGate({ children }) {
         if (approval === 'pending' || userInfo?.is_approved === false) {
             return { kind: 'pending' };
         }
+        if (userInfo?.subscription?.is_active === false) {
+            return { kind: 'subscription-expired' };
+        }
         if (approval === 'rejected' || userInfo?.is_active === false) {
             return { kind: 'deactivated' };
         }
@@ -32,7 +36,7 @@ export default function AccountStatusGate({ children }) {
     useFocusEffect(
         useCallback(() => {
             const onBackPress = () => {
-                if (status.kind === 'deactivated' || status.kind === 'pending') {
+                if (status.kind === 'deactivated' || status.kind === 'pending' || status.kind === 'subscription-expired') {
                     BackHandler.exitApp();
                     return true;
                 }
@@ -43,6 +47,9 @@ export default function AccountStatusGate({ children }) {
         }, [status.kind])
     );
 
+    if (status.kind === 'subscription-expired') {
+        return <SubscriptionExpiredScreen />;
+    }
     if (status.kind === 'deactivated') {
         return <AccountDeactivatedScreen />;
     }
