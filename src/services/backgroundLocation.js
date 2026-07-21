@@ -42,7 +42,7 @@ async function sendLocationToBackend(latitude, longitude) {
             console.log('[BG Location] Reverse geocode err:', geocodeErr);
         }
 
-        await api.post(
+        const response = await api.post(
             ENDPOINTS.TECHNICIAN.LOCATION_PING,
             {
                 latitude,
@@ -51,8 +51,10 @@ async function sendLocationToBackend(latitude, longitude) {
             }
         );
         console.log('[BG Location] Location sent to backend.');
+        return response.status >= 200 && response.status < 300;
     } catch (error) {
         console.log('[BG Location] Failed to send location:', error?.response?.data || error.message);
+        return false;
     }
 }
 
@@ -113,8 +115,10 @@ export async function sendCurrentLocationNow() {
         if (!(await shouldSendLocation(latitude, longitude))) return;
         isSendingInProgress = true;
         try {
-            await sendLocationToBackend(latitude, longitude);
-            await markLocationSent(latitude, longitude);
+            const sent = await sendLocationToBackend(latitude, longitude);
+            if (sent) {
+                await markLocationSent(latitude, longitude);
+            }
         } finally {
             isSendingInProgress = false;
         }
@@ -131,7 +135,8 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     if (data) {
         const { locations } = data;
         if (locations && locations.length > 0) {
-            const { latitude, longitude } = locations[0].coords;
+            // Expo can batch samples while the app is backgrounded; use the newest point.
+            const { latitude, longitude } = locations[locations.length - 1].coords;
             const now = Date.now();
             if (now - lastReceivedLogAt >= MIN_RECEIVED_LOG_INTERVAL_MS) {
                 console.log(`[BG Location] Received: ${latitude}, ${longitude}`);
@@ -143,8 +148,10 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
             isSendingInProgress = true;
             try {
-                await sendLocationToBackend(latitude, longitude);
-                await markLocationSent(latitude, longitude);
+                const sent = await sendLocationToBackend(latitude, longitude);
+                if (sent) {
+                    await markLocationSent(latitude, longitude);
+                }
             } finally {
                 isSendingInProgress = false;
             }
