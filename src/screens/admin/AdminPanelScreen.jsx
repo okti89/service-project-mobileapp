@@ -116,6 +116,14 @@ const ADMIN_MENU_ITEMS = [
         color: serviceGreen,
     },
     {
+        key: 'quotes',
+        icon: 'file-document-edit-outline',
+        label: 'Teklifler',
+        description: 'Müşteri tekliflerini hazırla ve paylaş',
+        route: 'AdminQuotes',
+        color: serviceBlue,
+    },
+    {
         key: 'notifications',
         icon: 'bell-outline',
         label: 'Bildirimler',
@@ -148,7 +156,7 @@ const PERMISSION_ITEM_MAP = {
     can_manage_inventory: ['inventory'],
     can_manage_hr: ['finance-payroll'],
     can_manage_accounting: ['finance-accounting'],
-    can_manage_services: ['services'],
+    can_manage_services: ['services', 'quotes'],
     can_manage_notifications: ['notifications'],
     can_manage_reports: ['reports'],
     can_manage_settings: ['company-settings'],
@@ -156,7 +164,7 @@ const PERMISSION_ITEM_MAP = {
 
 const MENU_CATEGORIES = [
     { key: 'users', label: 'Kullanıcı ve Ekip Yönetimi', items: ['users-list', 'users-pending', 'technicians-list'] },
-    { key: 'field', label: 'Saha ve Operasyon', items: ['services', 'technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
+    { key: 'field', label: 'Saha ve Operasyon', items: ['services', 'quotes', 'technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
     { key: 'finance', label: 'Finans ve Muhasebe', items: ['finance-payroll', 'finance-accounting'] },
     { key: 'customer_inventory', label: 'Müşteri ve Envanter', items: ['customers-list', 'inventory'] },
     { key: 'system', label: 'Sistem Yönetimi', items: ['notifications', 'reports', 'company-settings'] }

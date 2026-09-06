@@ -87,6 +87,14 @@ const ENDPOINTS = {
         CATEGORIES: 'products/categories/',
         STOCK_MOVEMENTS: 'products/stock-movements/',
     },
+    QUOTES: {
+        LIST: 'quotes/',
+        DETAIL: (id) => `quotes/${id}/`,
+        PDF: (id) => `quotes/${id}/pdf/`,
+        SEND_EMAIL: (id) => `quotes/${id}/send-email/`,
+        MARK_SENT: (id) => `quotes/${id}/mark-sent/`,
+        CONVERT_TO_SERVICE: (id) => `quotes/${id}/convert-to-service/`,
+    },
     REPORTS: {
         DASHBOARD: 'reports/dashboard/',
         GENERAL: 'reports/general/',

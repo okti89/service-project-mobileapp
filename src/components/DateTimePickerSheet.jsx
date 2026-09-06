@@ -179,7 +179,7 @@ const CustomCalendar = ({ value, onSelect }) => {
     );
 };
 
-const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
+const DateTimePickerSheet = ({ visible, value, onChange, onClose, dateOnly = false }) => {
     const { colors, isDark } = useTheme();
     const [step, setStep] = useState(1);
     const [tempDate, setTempDate] = useState(value || new Date());
@@ -231,12 +231,12 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
     }, []);
 
     const handleConfirm = useCallback(() => {
-        const [h, m] = (selectedTime || '10:00').split(':').map(Number);
+        const [h, m] = (dateOnly ? '00:00' : selectedTime || '10:00').split(':').map(Number);
         const next = new Date(tempDate);
         next.setHours(h || 0, m || 0, 0, 0);
         onChange?.(next);
         onClose?.();
-    }, [tempDate, selectedTime, onChange, onClose]);
+    }, [tempDate, selectedTime, onChange, onClose, dateOnly]);
 
     const cardBg = isDark ? colors.surface : '#FFFFFF';
     const rowBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15, 23, 42, 0.035)';
@@ -248,13 +248,13 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
         <AppBottomSheet
             visible={visible}
             onClose={onClose}
-            snapPoints={['92%']}
+            snapPoints={[dateOnly ? '76%' : '92%']}
             wrapContent={false}
             keyboardBehavior="extend"
         >
             <View style={[styles.sheetInner, { backgroundColor: cardBg }]}>
                 <View style={styles.headerRow}>
-                    {step === 2 && (
+                    {!dateOnly && step === 2 && (
                         <Pressable
                             onPress={() => setStep(1)}
                             hitSlop={10}
@@ -278,7 +278,7 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
                     <View style={styles.headerInfo}>
                         <View style={styles.stepBadgeRow}>
                             <Text style={[styles.stepBadge, { color: colors.primary }]}>
-                                ADIM {step}/2
+                                {dateOnly ? 'TARİH' : `ADIM ${step}/2`}
                             </Text>
                         </View>
                         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -286,7 +286,7 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
                         </Text>
                         <Text style={[styles.headerSubtitle, { color: secondaryText }]}>
                             {dayjs(tempDate).format('DD MMMM YYYY')}
-                            {step === 2 ? ` · ${selectedTime}` : ''}
+                            {!dateOnly && step === 2 ? ` · ${selectedTime}` : ''}
                         </Text>
                     </View>
                     <Pressable
@@ -425,7 +425,7 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
                         </>
                     )}
                     <Pressable
-                        onPress={step === 1 ? () => setStep(2) : handleConfirm}
+                        onPress={dateOnly || step === 2 ? handleConfirm : () => setStep(2)}
                         style={({ pressed }) => [
                             styles.confirmButton,
                             {
@@ -435,12 +435,14 @@ const DateTimePickerSheet = ({ visible, value, onChange, onClose }) => {
                         ]}
                     >
                         <MaterialCommunityIcons
-                            name={step === 1 ? 'arrow-right' : 'check'}
+                            name={dateOnly || step === 2 ? 'check' : 'arrow-right'}
                             size={18}
                             color="#FFFFFF"
                         />
                         <Text style={styles.confirmText}>
-                            {step === 1
+                            {dateOnly
+                                ? `${dayjs(tempDate).format('DD MMM YYYY')} tarihini seç`
+                                : step === 1
                                 ? `Devam · ${dayjs(tempDate).format('DD MMM YYYY')}`
                                 : `${dayjs(tempDate).format('DD MMM YYYY')} · ${selectedTime} olarak ayarla`}
                         </Text>
