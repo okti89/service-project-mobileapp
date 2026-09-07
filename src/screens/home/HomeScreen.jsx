@@ -43,7 +43,7 @@ import { typography } from "@/theme/typography";
 
 export default function HomeScreen({ navigation }) {
     const { colors, isDark } = useTheme();
-    const { userInfo, isAdmin, syncLocationTrackingByShift, hasLocationTrackingPermissions, ensureLocationTrackingPermissions } = useAuth();
+    const { userInfo, isAdmin, mobilePermissions, syncLocationTrackingByShift, hasLocationTrackingPermissions, ensureLocationTrackingPermissions } = useAuth();
     const { unreadCount, updateUnreadCount } = useNotifications() || { unreadCount: 0 };
     const { config } = useConfig();
     const { showToast } = useToast();
@@ -56,6 +56,7 @@ export default function HomeScreen({ navigation }) {
     const [servicesLoading, setServicesLoading] = useState(false);
     const [services, setServices] = useState([]);
     const [shifts, setShifts] = useState([]);
+    const [weeklyServiceSummary, setWeeklyServiceSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [now, setNow] = useState(dayjs());
@@ -79,6 +80,7 @@ export default function HomeScreen({ navigation }) {
     const fullName = [firstName, lastName].filter(Boolean).join(' ') || userInfo?.email || 'Mehmet Yılmaz';
     const roleLabel = isAdmin ? 'Sistem Yöneticisi' : (userInfo?.role_name || 'Teknik Servis Uzmanı');
     const avatarUri = resolveMediaUrl(userInfo?.avatar || userInfo?.profile_photo);
+    const canViewWeeklySummary = isAdmin || Boolean(mobilePermissions?.can_manage_services);
 
     const openShift = shifts.find((shift) => shift?.start_time && !shift?.end_time) || null;
     const openShiftDateLabel = openShift?.start_time
@@ -102,6 +104,18 @@ export default function HomeScreen({ navigation }) {
             const servicesRes = await api.get(endpoint, { params });
             setServices(Array.isArray(servicesRes?.data) ? servicesRes.data : []);
 
+            if (canViewWeeklySummary) {
+                try {
+                    const weeklySummaryRes = await api.get(ENDPOINTS.SERVICES.WEEKLY_SCHEDULED_SUMMARY);
+                    setWeeklyServiceSummary(weeklySummaryRes?.data || null);
+                } catch (weeklyError) {
+                    console.error('Weekly scheduled service summary fetch error:', weeklyError);
+                    setWeeklyServiceSummary(null);
+                }
+            } else {
+                setWeeklyServiceSummary(null);
+            }
+
             // 2. Fetch shifts from last 30 days to detect any overnight open shifts
             const shiftsRes = await api.get(ENDPOINTS.TECHNICIAN.SHIFTS, {
                 params: {
@@ -121,7 +135,7 @@ export default function HomeScreen({ navigation }) {
             setRefreshing(false);
             setServicesLoading(false);
         }
-    }, [updateUnreadCount, selectedDate, activeTab, isAdmin]);
+    }, [updateUnreadCount, selectedDate, activeTab, isAdmin, canViewWeeklySummary]);
 
     useEffect(() => {
         fetchData();
@@ -513,6 +527,32 @@ export default function HomeScreen({ navigation }) {
                             )}
                         </Pressable>
                     </View>
+
+                    {canViewWeeklySummary && weeklyServiceSummary && (
+                        <View style={[styles.weeklySummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                            <View style={styles.weeklySummaryHeader}>
+                                <View>
+                                    <Text style={[styles.weeklySummaryTitle, { color: colors.text }]}>Bu Hafta Planlanan Servisler</Text>
+                                    <Text style={[styles.weeklySummaryRange, { color: colors.textTertiary }]}>Pazartesi - Pazar</Text>
+                                </View>
+                                <View style={[styles.weeklySummaryTotal, { backgroundColor: `${colors.primary}12` }]}>
+                                    <Text style={[styles.weeklySummaryTotalValue, { color: colors.primary }]}>{weeklyServiceSummary.total || 0}</Text>
+                                    <Text style={[styles.weeklySummaryTotalLabel, { color: colors.primary }]}>Toplam</Text>
+                                </View>
+                            </View>
+                            <View style={[styles.weeklyDays, { borderTopColor: colors.border }]}>
+                                {(weeklyServiceSummary.days || []).map((day) => {
+                                    const isToday = day.date === dayjs().format('YYYY-MM-DD');
+                                    return (
+                                        <View key={day.date} style={[styles.weeklyDay, isToday && { backgroundColor: `${colors.primary}10` }]}>
+                                            <Text style={[styles.weeklyDayLabel, { color: isToday ? colors.primary : colors.textSecondary }]}>{day.label}</Text>
+                                            <Text style={[styles.weeklyDayCount, { color: isToday ? colors.primary : colors.text }]}>{day.count}</Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
 
                     {/* 5. TODAY'S SERVICES SECTION */}
                     <View style={styles.sectionHeader}>
@@ -1226,6 +1266,71 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: fs(14),
         fontWeight: '700',
+    },
+    weeklySummaryCard: {
+        borderWidth: 1,
+        borderRadius: sp(16),
+        marginBottom: spacing.l,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: sp(4),
+        elevation: 1,
+    },
+    weeklySummaryHeader: {
+        minHeight: sp(58),
+        paddingHorizontal: sp(14),
+        paddingVertical: sp(10),
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    weeklySummaryTitle: {
+        fontSize: fs(14),
+        fontWeight: '700',
+    },
+    weeklySummaryRange: {
+        fontSize: fs(10),
+        marginTop: sp(2),
+    },
+    weeklySummaryTotal: {
+        minWidth: sp(58),
+        paddingHorizontal: sp(10),
+        paddingVertical: sp(6),
+        borderRadius: sp(10),
+        alignItems: 'center',
+    },
+    weeklySummaryTotalValue: {
+        fontSize: fs(17),
+        fontWeight: '800',
+        lineHeight: lh(19),
+    },
+    weeklySummaryTotalLabel: {
+        fontSize: fs(9),
+        fontWeight: '600',
+    },
+    weeklyDays: {
+        borderTopWidth: 1,
+        flexDirection: 'row',
+        paddingHorizontal: sp(6),
+        paddingVertical: sp(7),
+    },
+    weeklyDay: {
+        flex: 1,
+        minWidth: 0,
+        paddingVertical: sp(5),
+        borderRadius: sp(8),
+        alignItems: 'center',
+    },
+    weeklyDayLabel: {
+        fontSize: fs(9),
+        fontWeight: '600',
+    },
+    weeklyDayCount: {
+        fontSize: fs(15),
+        fontWeight: '800',
+        marginTop: sp(2),
     },
     statsGrid: {
         flexDirection: 'row',

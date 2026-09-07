@@ -124,12 +124,16 @@ export default function QuoteFormScreen({ navigation, route }) {
     }, [isEdit, navigation, quoteId, showToast]);
 
     const updateItem = (index, field, value) => {
-        setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item));
+        setItems((current) => current.map((item, itemIndex) => {
+            if (itemIndex !== index) return item;
+            if (field === 'name') return { ...item, name: value, product: null };
+            return { ...item, [field]: value };
+        }));
     };
 
     const removeItem = (index) => {
         if (items.length === 1) {
-            showToast('warning', 'Kalem gerekli', 'Teklifte en az bir kalem bulunmalıdır.');
+            showToast('warning', 'İşlem gerekli', 'Teklifte en az bir işlem bulunmalıdır.');
             return;
         }
         setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
@@ -160,12 +164,12 @@ export default function QuoteFormScreen({ navigation, route }) {
 
     const validate = () => {
         if (!customer?.id) return 'Müşteri seçmelisiniz.';
-        if (!items.length) return 'En az bir teklif kalemi eklemelisiniz.';
+        if (!items.length) return 'En az bir teklif işlemi eklemelisiniz.';
         for (let index = 0; index < items.length; index += 1) {
             const item = items[index];
-            if (!String(item.name || '').trim()) return `${index + 1}. kalemin adı zorunludur.`;
-            if (numberValue(item.quantity) < 1) return `${index + 1}. kalemin adedi en az 1 olmalıdır.`;
-            if (String(item.unit_price ?? '').trim() === '' || numberValue(item.unit_price) < 0) return `${index + 1}. kalemin birim fiyatını girin.`;
+            if (!String(item.name || '').trim()) return `${index + 1}. işlemin adı zorunludur.`;
+            if (numberValue(item.quantity) < 1) return `${index + 1}. işlemin adedi en az 1 olmalıdır.`;
+            if (String(item.unit_price ?? '').trim() === '' || numberValue(item.unit_price) < 0) return `${index + 1}. işlemin birim fiyatını girin.`;
         }
         return null;
     };
@@ -225,7 +229,7 @@ export default function QuoteFormScreen({ navigation, route }) {
                 <Pressable onPress={() => navigation.goBack()} style={styles.headerButton}><MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} /></Pressable>
                 <View style={styles.headerTitleWrap}>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>{isEdit ? 'Teklifi Düzenle' : 'Yeni Teklif'}</Text>
-                    <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Müşteri ve teklif kalemleri</Text>
+                    <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Müşteri ve teklif işlemleri</Text>
                 </View>
                 <Pressable onPress={save} disabled={saving} style={styles.headerButton}>{saving ? <ActivityIndicator size="small" color={serviceBlue} /> : <MaterialCommunityIcons name="check" size={24} color={serviceBlue} />}</Pressable>
             </View>
@@ -255,18 +259,18 @@ export default function QuoteFormScreen({ navigation, route }) {
                     </View>
 
                     <View style={styles.itemsHeader}>
-                        <View><Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 2 }]}>TEKLİF KALEMLERİ</Text><Text style={[styles.itemsHint, { color: colors.textTertiary }]}>{items.length} kalem</Text></View>
-                        <Pressable onPress={() => setItems((current) => [...current, newItem()])} style={[styles.addItemButton, { backgroundColor: `${serviceBlue}14` }]}><MaterialCommunityIcons name="plus" size={18} color={serviceBlue} /><Text style={styles.addItemText}>Kalem Ekle</Text></Pressable>
+                        <View><Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 2 }]}>TEKLİF İŞLEMLERİ</Text><Text style={[styles.itemsHint, { color: colors.textTertiary }]}>{items.length} işlem</Text></View>
+                        <Pressable onPress={() => setItems((current) => [...current, newItem()])} style={[styles.addItemButton, { backgroundColor: `${serviceBlue}14` }]}><MaterialCommunityIcons name="plus" size={18} color={serviceBlue} /><Text style={styles.addItemText}>İşlem Ekle</Text></Pressable>
                     </View>
 
                     {items.map((item, index) => (
                         <View key={item.key} style={[styles.itemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                            <View style={styles.itemCardHeader}><Text style={[styles.itemNumber, { color: colors.text }]}>Kalem {index + 1}</Text><Pressable onPress={() => removeItem(index)} hitSlop={10}><MaterialCommunityIcons name="trash-can-outline" size={20} color={serviceRed} /></Pressable></View>
-                            <View style={styles.productSelectorRow}>
-                                <Pressable onPress={() => { setPickerSearch(''); setProductItemIndex(index); }} style={[styles.productSelector, { borderColor: colors.border }]}><MaterialCommunityIcons name="package-variant" size={18} color={serviceBlue} /><Text style={[styles.productSelectorText, { color: item.product ? colors.text : colors.textSecondary }]} numberOfLines={1}>{item.product ? products.find((product) => String(product.id) === String(item.product))?.name || item.name : 'Ürün seç (isteğe bağlı)'}</Text><MaterialCommunityIcons name="chevron-down" size={18} color={colors.textTertiary} /></Pressable>
-                                {!!item.product && <Pressable accessibilityLabel="Ürün bağlantısını kaldır" onPress={() => updateItem(index, 'product', null)} style={[styles.clearProduct, { borderColor: colors.border }]}><MaterialCommunityIcons name="link-off" size={18} color={colors.textSecondary} /></Pressable>}
+                            <View style={styles.itemCardHeader}><Text style={[styles.itemNumber, { color: colors.text }]}>İşlem {index + 1}</Text><Pressable onPress={() => removeItem(index)} hitSlop={10}><MaterialCommunityIcons name="trash-can-outline" size={20} color={serviceRed} /></Pressable></View>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>İşlem Adı *</Text>
+                            <View style={styles.operationInputRow}>
+                                <TextInput value={item.name} onChangeText={(value) => updateItem(index, 'name', value)} placeholder="İşlem adını yazın" placeholderTextColor={colors.textTertiary} style={[styles.input, styles.operationInput, { color: colors.text, borderColor: colors.border }]} />
+                                <Pressable accessibilityLabel="Kayıtlı ürünlerden işlem seç" onPress={() => { setPickerSearch(''); setProductItemIndex(index); }} style={[styles.productPickerButton, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}><MaterialCommunityIcons name="package-variant" size={18} color={serviceBlue} /><Text style={styles.productPickerButtonText}>Ürünlerden Seç</Text></Pressable>
                             </View>
-                            <TextInput value={item.name} onChangeText={(value) => updateItem(index, 'name', value)} placeholder="Kalem adı *" placeholderTextColor={colors.textTertiary} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
                             <TextInput value={item.description} onChangeText={(value) => updateItem(index, 'description', value)} placeholder="Açıklama" placeholderTextColor={colors.textTertiary} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
                             <View style={styles.itemFieldsRow}>
                                 <View style={styles.smallField}><Text style={[styles.label, { color: colors.textSecondary }]}>Adet</Text><TextInput value={item.quantity} onChangeText={(value) => updateItem(index, 'quantity', value.replace(/[^0-9]/g, ''))} keyboardType="number-pad" style={[styles.input, { color: colors.text, borderColor: colors.border }]} /></View>
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     itemsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }, itemsHint: { fontSize: 11, fontWeight: '600' },
     addItemButton: { height: 38, borderRadius: 11, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }, addItemText: { color: serviceBlue, fontSize: 12, fontWeight: '800' },
     itemCard: { borderWidth: 1, borderRadius: 16, padding: 13, marginBottom: 10 }, itemCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }, itemNumber: { fontSize: 14, fontWeight: '900' },
-    productSelectorRow: { flexDirection: 'row', gap: 8 }, productSelector: { flex: 1, height: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 9 }, productSelectorText: { flex: 1, fontSize: 13, fontWeight: '700' }, clearProduct: { width: 46, height: 46, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    operationInputRow: { flexDirection: 'row', gap: 8, marginBottom: 9 }, operationInput: { flex: 1, marginBottom: 0 }, productPickerButton: { minHeight: 46, maxWidth: 116, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }, productPickerButtonText: { color: serviceBlue, fontSize: 11, fontWeight: '800', flexShrink: 1 },
     input: { height: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 11, fontSize: 14, fontWeight: '600', marginBottom: 9 }, itemFieldsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 }, smallField: { width: 62 }, priceField: { flex: 1 }, lineTotal: { flex: 1, minWidth: 0, paddingBottom: 19, alignItems: 'flex-end' }, lineTotalText: { fontSize: 13, fontWeight: '900' },
     totalCard: { borderWidth: 1, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }, totalLabel: { fontSize: 13, fontWeight: '800' }, totalValue: { fontSize: 21, fontWeight: '900' },
     actions: { flexDirection: 'row', gap: 10, marginTop: 14 }, saveButton: { flex: 1, height: 52, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }, saveText: { color: '#FFF', fontSize: 15, fontWeight: '900' }, deleteButton: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 17, flexDirection: 'row', alignItems: 'center', gap: 6 }, deleteText: { color: serviceRed, fontSize: 14, fontWeight: '800' },

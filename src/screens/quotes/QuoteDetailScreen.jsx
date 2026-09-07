@@ -199,12 +199,12 @@ export default function QuoteDetailScreen({ navigation, route }) {
                     <ActionButton icon="email-outline" label="E-posta" color={serviceOrange} onPress={sendEmail} loading={busyAction === 'email'} disabled={Boolean(busyAction)} colors={colors} />
                 </View>
 
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>TEKLİF KALEMLERİ</Text>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>TEKLİF İŞLEMLERİ</Text>
                 <View style={[styles.itemsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     {(quote.items || []).map((item, index) => (
                         <View key={item.id || index} style={[styles.itemRow, index > 0 && { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
                             <View style={styles.itemIndex}><Text style={styles.itemIndexText}>{index + 1}</Text></View>
-                            <View style={styles.itemInfo}><Text style={[styles.itemName, { color: colors.text }]}>{item.name || 'Teklif kalemi'}</Text>{item.description ? <Text style={[styles.itemDescription, { color: colors.textSecondary }]}>{item.description}</Text> : null}<Text style={[styles.itemCalculation, { color: colors.textTertiary }]}>{item.quantity} × {money(item.unit_price)}</Text></View>
+                            <View style={styles.itemInfo}><Text style={[styles.itemName, { color: colors.text }]}>{item.name || 'Teklif işlemi'}</Text>{item.description ? <Text style={[styles.itemDescription, { color: colors.textSecondary }]}>{item.description}</Text> : null}<Text style={[styles.itemCalculation, { color: colors.textTertiary }]}>{item.quantity} × {money(item.unit_price)}</Text></View>
                             <Text style={[styles.itemTotal, { color: colors.text }]}>{money(item.total_price)}</Text>
                         </View>
                     ))}

@@ -48,6 +48,7 @@ const ENDPOINTS = {
         TECHNICIAN_DETAIL: (id) => `services/technician-services/${id}/`,
         ADMIN_LIST: 'services/admin-services/',
         ADMIN_DETAIL: (id) => `services/admin-services/${id}/`,
+        WEEKLY_SCHEDULED_SUMMARY: 'services/weekly-scheduled-summary/',
         ADMIN_FORM_PDF: (id) => `services/admin-services/${id}/form-pdf/`,
         ADMIN_WARRANTY_PDF: (id) => `services/admin-services/${id}/warranty-pdf/`,
         ADMIN_WHATSAPP_STATUS_LINK: (id) => `services/admin-services/${id}/whatsapp-status-link/`,
