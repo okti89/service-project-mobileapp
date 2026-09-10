@@ -17,6 +17,7 @@ import { useTheme } from '@/context/ThemeContext';
 import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 
@@ -346,7 +347,8 @@ export default function CustomerDetailScreen({ navigation, route }) {
                     </View>
                 ) : (
                     activeServices.map(s => {
-                        const statusConfig = STATUS_CONFIGS[s.service_status] || { label: s.service_status, color: colors.textSecondary, bg: colors.border };
+                        const baseStatusConfig = STATUS_CONFIGS[s.service_status] || { color: colors.textSecondary, bg: colors.border };
+                        const statusConfig = { ...baseStatusConfig, label: getServiceStatusLabel(s) };
                         return (
                             <Pressable
                                 key={s.id}

@@ -29,6 +29,7 @@ import { getNativeShare } from '@/utils/nativeShare';
 import api from "@/api/axios";
 import ENDPOINTS from "@/api/endpoints";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
+import { getServiceStatusLabel } from "@/utils/serviceStatus";
 
 import buildShiftState from "@/utils/shiftSummary";
 import WrapperContainer, { NO_BOTTOM_EDGES } from '@/components/WrapperContainer';
@@ -57,6 +58,10 @@ export default function HomeScreen({ navigation }) {
     const [services, setServices] = useState([]);
     const [shifts, setShifts] = useState([]);
     const [weeklyServiceSummary, setWeeklyServiceSummary] = useState(null);
+    const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
+    const [weeklySummaryError, setWeeklySummaryError] = useState(false);
+    const [weeklySummaryExpanded, setWeeklySummaryExpanded] = useState(false);
+    const [shiftCardExpanded, setShiftCardExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [now, setNow] = useState(dayjs());
@@ -105,15 +110,22 @@ export default function HomeScreen({ navigation }) {
             setServices(Array.isArray(servicesRes?.data) ? servicesRes.data : []);
 
             if (canViewWeeklySummary) {
+                setWeeklySummaryLoading(true);
+                setWeeklySummaryError(false);
                 try {
                     const weeklySummaryRes = await api.get(ENDPOINTS.SERVICES.WEEKLY_SCHEDULED_SUMMARY);
                     setWeeklyServiceSummary(weeklySummaryRes?.data || null);
                 } catch (weeklyError) {
                     console.error('Weekly scheduled service summary fetch error:', weeklyError);
                     setWeeklyServiceSummary(null);
+                    setWeeklySummaryError(true);
+                } finally {
+                    setWeeklySummaryLoading(false);
                 }
             } else {
                 setWeeklyServiceSummary(null);
+                setWeeklySummaryError(false);
+                setWeeklySummaryLoading(false);
             }
 
             // 2. Fetch shifts from last 30 days to detect any overnight open shifts
@@ -266,7 +278,7 @@ export default function HomeScreen({ navigation }) {
                 const baseUrl = config.panel_url.replace(/\/+$/, '');
                 trackingUrl = `${baseUrl}/service-tracking/${serviceId}/`;
             }
-            const statusLabel = getStatusBadge(currentStatus, 1)?.label || 'Planlandı';
+            const statusLabel = getServiceStatusLabel(currentStatus, 'Planlandı');
             const message = `Sayın ${customerName || 'Müşterimiz'},\n\nServis Kaydınızın Durumu: *${statusLabel}*\n\nTakip Linki: ${trackingUrl || 'Yok'}`;
 
             Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`).catch(() => {
@@ -285,7 +297,7 @@ export default function HomeScreen({ navigation }) {
             const baseUrl = config.panel_url.replace(/\/+$/, '');
             trackingUrl = `${baseUrl}/service-tracking/${serviceId}/`;
         }
-        const statusLabel = getStatusBadge(currentStatus, 1)?.label || 'Planlandı';
+        const statusLabel = getServiceStatusLabel(currentStatus, 'Planlandı');
         const message = `Sayın ${customerName || 'Müşterimiz'}, servis kaydınızın durumu: ${statusLabel}. Takip linki: ${trackingUrl || 'Yok'}`;
 
         Linking.openURL(`sms:${cleanPhone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(message)}`).catch(() => {
@@ -458,90 +470,166 @@ export default function HomeScreen({ navigation }) {
 
                     {/* 3. SHIFT CARD */}
                     <View style={[styles.shiftCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                        <View style={styles.shiftDetails}>
-                            <Text style={[styles.shiftLabel, { color: colors.textSecondary }]}>Mesai Durumu</Text>
-                            <View style={styles.shiftStatus}>
-                                <Text style={[styles.shiftStatusText, { color: colors.text }]}>
-                                    {shiftState.isActiveToday ? 'Mesai Devam Ediyor' : 'Mesai Başlatılmadı'}
+                        <View style={styles.shiftSummaryRow}>
+                            <View
+                                style={[
+                                    styles.shiftStateIndicator,
+                                    { backgroundColor: shiftState.statusColor || colors.textTertiary },
+                                ]}
+                            />
+                            <View style={styles.shiftSummaryContent}>
+                                <Text style={[styles.shiftStatusText, { color: shiftState.statusColor || colors.text }]} numberOfLines={1}>
+                                    {shiftState.statusLabel}
                                 </Text>
-                                <View style={[styles.statusDot, { backgroundColor: shiftState.isActiveToday ? '#10B981' : colors.error, marginLeft: sp(6) }]} />
-                            </View>
-                            <Text style={[styles.shiftTimer, { color: colors.text }]}>
-                                {shiftState.counterLabel || '00:00:00'}
-                            </Text>
-                            <View style={styles.shiftTimesRow}>
-                                <Text style={[styles.shiftStart, { color: colors.textTertiary }]}>
-                                    Giriş: {shiftState.startLabel !== '--:--' ? shiftState.startLabel : ('-- : --')}
-                                </Text>
-                                <Text style={[styles.shiftStart, { color: colors.textTertiary }]}>
-                                    Bitiş: {shiftState.endLabel !== '--:--' ? shiftState.endLabel : ('-- : --')}
+                                <Text style={[styles.shiftTimer, { color: colors.text }]} numberOfLines={1}>
+                                    {shiftState.counterLabel || '00:00:00'}
                                 </Text>
                             </View>
-
-                            {/* Şirket Mesai Saatleri Bilgisi */}
-                            <Text style={[styles.shiftStart, { color: colors.textTertiary, marginTop: sp(4) }]}>
-                                Şirket Saatleri: {shiftState.todayScheduleLabel || 'Tanımlı değil'}
-                            </Text>
-
-                            {/* Mesai Hedef Tamamlanma Barı */}
-                            {shiftState.scheduleSeconds > 0 && (
-                                <View style={styles.progressContainer}>
-                                    <View style={[styles.progressBarBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' }]}>
-                                        <View
-                                            style={[
-                                                styles.progressBarFill,
-                                                {
-                                                    width: `${shiftState.completedPercentage}%`,
-                                                    backgroundColor: shiftState.completedPercentage >= 100 ? '#10B981' : '#0066CC',
-                                                }
-                                            ]}
+                            <Pressable
+                                style={({ pressed }) => [
+                                    styles.shiftButton,
+                                    { backgroundColor: shiftState.isActiveToday ? '#EF4444' : '#00A36C' },
+                                    pressed && styles.shiftControlPressed,
+                                ]}
+                                onPress={handleToggleShift}
+                                disabled={shiftActionLoading}
+                                accessibilityRole="button"
+                            >
+                                {shiftActionLoading ? (
+                                    <ActivityIndicator size="small" color="#FFF" />
+                                ) : (
+                                    <>
+                                        <MaterialCommunityIcons
+                                            name={shiftState.isActiveToday ? 'stop-circle-outline' : 'play-circle-outline'}
+                                            size={sp(18)}
+                                            color="#FFF"
                                         />
+                                        <Text style={styles.shiftButtonText}>
+                                            {shiftState.isActiveToday ? 'Mesaiyi Bitir' : 'Mesaiyi Başlat'}
+                                        </Text>
+                                    </>
+                                )}
+                            </Pressable>
+                            <Pressable
+                                style={({ pressed }) => [styles.shiftExpandButton, pressed && styles.shiftControlPressed]}
+                                onPress={() => setShiftCardExpanded((expanded) => !expanded)}
+                                accessibilityRole="button"
+                                accessibilityLabel="Mesai ayrıntıları"
+                                accessibilityHint={shiftCardExpanded ? 'Mesai ayrıntılarını gizler' : 'Mesai ayrıntılarını gösterir'}
+                                accessibilityState={{ expanded: shiftCardExpanded }}
+                            >
+                                <MaterialCommunityIcons
+                                    name={shiftCardExpanded ? 'chevron-up' : 'chevron-down'}
+                                    size={sp(22)}
+                                    color={colors.textSecondary}
+                                />
+                            </Pressable>
+                        </View>
+
+                        {shiftCardExpanded && (
+                            <View style={[styles.shiftExpandedContent, { borderTopColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.025)' : '#F8FAFC' }]}>
+                                <View style={styles.shiftMetaRow}>
+                                    <View style={styles.shiftMetaItem}>
+                                        <MaterialCommunityIcons name="calendar-month-outline" size={sp(16)} color={colors.primary} />
+                                        <Text style={[styles.shiftMetaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                                            {openShiftDateLabel !== '--' ? openShiftDateLabel : dayjs().format('D MMMM YYYY')}
+                                        </Text>
                                     </View>
-                                    <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-                                        Günlük Hedef: {shiftState.progressLabel}
+                                    <Text style={[styles.shiftProgressValue, { color: shiftState.isCompletedTarget ? '#10B981' : colors.primary }]}>
+                                        {shiftState.progressShortLabel}
                                     </Text>
                                 </View>
-                            )}
-                        </View>
-                        <Pressable
-                            style={[
-                                styles.shiftButton,
-                                { backgroundColor: shiftState.isActiveToday ? '#EF4444' : '#00A36C' }
-                            ]}
-                            onPress={handleToggleShift}
-                            disabled={shiftActionLoading}
-                        >
-                            {shiftActionLoading ? (
-                                <ActivityIndicator size="small" color="#FFF" />
-                            ) : (
-                                <>
-                                    <MaterialCommunityIcons
-                                        name={shiftState.isActiveToday ? "stop-circle-outline" : "play-circle-outline"}
-                                        size={20}
-                                        color="#FFF"
-                                    />
-                                    <Text style={styles.shiftButtonText}>
-                                        {shiftState.isActiveToday ? 'Mesaiyi Bitir' : 'Mesaiyi Başlat'}
-                                    </Text>
-                                </>
-                            )}
-                        </Pressable>
+
+                                <View style={styles.shiftInfoGrid}>
+                                    <View style={styles.shiftInfoItem}>
+                                        <MaterialCommunityIcons name="login" size={sp(16)} color={colors.textTertiary} />
+                                        <View>
+                                            <Text style={[styles.shiftInfoLabel, { color: colors.textTertiary }]}>Giriş</Text>
+                                            <Text style={[styles.shiftInfoValue, { color: colors.text }]}>{shiftState.startLabel || '--:--'}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.shiftInfoItem}>
+                                        <MaterialCommunityIcons name="logout" size={sp(16)} color={colors.textTertiary} />
+                                        <View>
+                                            <Text style={[styles.shiftInfoLabel, { color: colors.textTertiary }]}>Bitiş</Text>
+                                            <Text style={[styles.shiftInfoValue, { color: colors.text }]}>{shiftState.endLabel || '--:--'}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.shiftInfoItem}>
+                                        <MaterialCommunityIcons name="briefcase-clock-outline" size={sp(16)} color={colors.textTertiary} />
+                                        <View style={styles.shiftInfoCopy}>
+                                            <Text style={[styles.shiftInfoLabel, { color: colors.textTertiary }]}>Şirket saatleri</Text>
+                                            <Text style={[styles.shiftInfoValue, { color: colors.text }]} numberOfLines={1}>{shiftState.todayScheduleLabel || 'Tanımlı değil'}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {shiftState.scheduleSeconds > 0 && (
+                                    <View style={styles.progressContainer}>
+                                        <View style={styles.shiftProgressHeader}>
+                                            <Text style={[styles.progressText, { color: colors.textSecondary }]}>Günlük mesai ilerlemesi</Text>
+                                            <Text style={[styles.progressText, { color: shiftState.isCompletedTarget ? '#10B981' : colors.primary }]}>{shiftState.progressLabel}</Text>
+                                        </View>
+                                        <View style={[styles.progressBarBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0' }]}>
+                                            <View
+                                                style={[
+                                                    styles.progressBarFill,
+                                                    {
+                                                        width: `${shiftState.completedPercentage}%`,
+                                                        backgroundColor: shiftState.isCompletedTarget ? '#10B981' : colors.primary,
+                                                    },
+                                                ]}
+                                            />
+                                        </View>
+                                    </View>
+                                )}
+
+                                <Text style={[styles.shiftMetaDescription, { color: colors.textSecondary }]}>
+                                    {shiftState.metaLabel}
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
-                    {canViewWeeklySummary && weeklyServiceSummary && (
+                    {canViewWeeklySummary && (
                         <View style={[styles.weeklySummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                            <View style={styles.weeklySummaryHeader}>
-                                <View>
+                            <Pressable
+                                style={({ pressed }) => [styles.weeklySummaryHeader, pressed && styles.weeklySummaryHeaderPressed]}
+                                onPress={() => setWeeklySummaryExpanded((expanded) => !expanded)}
+                                accessibilityRole="button"
+                                accessibilityLabel="Bu hafta planlanan servis günleri"
+                                accessibilityHint={weeklySummaryExpanded ? 'Günlük servis sayılarını gizler' : 'Günlük servis sayılarını gösterir'}
+                                accessibilityState={{ expanded: weeklySummaryExpanded }}
+                            >
+                                <View style={styles.weeklySummaryHeading}>
                                     <Text style={[styles.weeklySummaryTitle, { color: colors.text }]}>Bu Hafta Planlanan Servisler</Text>
                                     <Text style={[styles.weeklySummaryRange, { color: colors.textTertiary }]}>Pazartesi - Pazar</Text>
                                 </View>
-                                <View style={[styles.weeklySummaryTotal, { backgroundColor: `${colors.primary}12` }]}>
-                                    <Text style={[styles.weeklySummaryTotalValue, { color: colors.primary }]}>{weeklyServiceSummary.total || 0}</Text>
-                                    <Text style={[styles.weeklySummaryTotalLabel, { color: colors.primary }]}>Toplam</Text>
+                                <View style={styles.weeklySummaryHeaderActions}>
+                                    <View style={[styles.weeklySummaryTotal, { backgroundColor: `${colors.primary}12` }]}>
+                                        <Text style={[styles.weeklySummaryTotalValue, { color: colors.primary }]}>{weeklySummaryLoading ? '-' : (weeklyServiceSummary?.total || 0)}</Text>
+                                        <Text style={[styles.weeklySummaryTotalLabel, { color: colors.primary }]}>Toplam</Text>
+                                    </View>
+                                    <MaterialCommunityIcons
+                                        name={weeklySummaryExpanded ? 'chevron-up' : 'chevron-down'}
+                                        size={sp(22)}
+                                        color={colors.textSecondary}
+                                    />
                                 </View>
-                            </View>
+                            </Pressable>
+                            {weeklySummaryExpanded && (weeklySummaryLoading ? (
+                                <View style={[styles.weeklySummaryMessage, { borderTopColor: colors.border }]}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                    <Text style={[styles.weeklySummaryMessageText, { color: colors.textSecondary }]}>Haftalık özet yükleniyor...</Text>
+                                </View>
+                            ) : weeklySummaryError ? (
+                                <View style={[styles.weeklySummaryMessage, { borderTopColor: colors.border }]}>
+                                    <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error} />
+                                    <Text style={[styles.weeklySummaryMessageText, { color: colors.textSecondary }]}>Haftalık özet alınamadı. Yenilemek için aşağı çekin.</Text>
+                                </View>
+                            ) : (
                             <View style={[styles.weeklyDays, { borderTopColor: colors.border }]}>
-                                {(weeklyServiceSummary.days || []).map((day) => {
+                                {(weeklyServiceSummary?.days || []).map((day) => {
                                     const isToday = day.date === dayjs().format('YYYY-MM-DD');
                                     return (
                                         <View key={day.date} style={[styles.weeklyDay, isToday && { backgroundColor: `${colors.primary}10` }]}>
@@ -551,6 +639,7 @@ export default function HomeScreen({ navigation }) {
                                     );
                                 })}
                             </View>
+                            ))}
                         </View>
                     )}
 
@@ -670,7 +759,7 @@ export default function HomeScreen({ navigation }) {
                                                 <View style={[styles.badgeContainer, { backgroundColor: badge.bgColor }]}>
                                                     <View style={[styles.badgeDot, { backgroundColor: badge.dotColor }]} />
                                                     <Text style={[styles.badgeLabel, { color: badge.color }]}>
-                                                        {badge.label}
+                                                        {getServiceStatusLabel(item, badge.label)}
                                                     </Text>
                                                 </View>
                                             </View>
@@ -718,13 +807,13 @@ export default function HomeScreen({ navigation }) {
                                         </Pressable>
                                         <Pressable
                                             style={[styles.actionBtn, { borderColor: `${badge.dotColor}30` }]}
-                                            onPress={() => handleWhatsAppTracking(item.customer_phone, item.customer_full_name, item.id, item.service_status)}
+                                            onPress={() => handleWhatsAppTracking(item.customer_phone, item.customer_full_name, item.id, item)}
                                         >
                                             <MaterialCommunityIcons name="whatsapp" size={18} color={badge.dotColor} />
                                         </Pressable>
                                         <Pressable
                                             style={[styles.actionBtn, { borderColor: `${badge.dotColor}30` }]}
-                                            onPress={() => handleSmsTracking(item.customer_phone, item.customer_full_name, item.id, item.service_status)}
+                                            onPress={() => handleSmsTracking(item.customer_phone, item.customer_full_name, item.id, item)}
                                         >
                                             <MaterialCommunityIcons name="message-text-outline" size={18} color={badge.dotColor} />
                                         </Pressable>
@@ -1186,28 +1275,96 @@ const styles = StyleSheet.create({
         fontSize: fs(12),
     },
     shiftCard: {
-        padding: sp(20),
-        borderRadius: sp(18),
+        borderRadius: sp(14),
         borderWidth: 1,
-        marginBottom: spacing.xl,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        marginBottom: spacing.l,
+        overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: sp(6),
-        elevation: 2,
+        shadowOpacity: 0.03,
+        shadowRadius: sp(4),
+        elevation: 1,
     },
-    shiftTimesRow: {
+    shiftSummaryRow: {
+        minHeight: sp(70),
         flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(8),
+        paddingLeft: sp(14),
+        paddingRight: sp(7),
+        paddingVertical: sp(8),
+    },
+    shiftStateIndicator: {
+        width: sp(9),
+        height: sp(9),
+        borderRadius: sp(5),
+    },
+    shiftSummaryContent: {
+        flex: 1,
+        minWidth: 0,
+    },
+    shiftExpandedContent: {
+        borderTopWidth: 1,
+        paddingHorizontal: sp(14),
+        paddingTop: sp(11),
+        paddingBottom: sp(12),
+    },
+    shiftMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: sp(10),
+    },
+    shiftMetaItem: {
+        flex: 1,
+        minWidth: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(6),
+    },
+    shiftMetaText: {
+        flex: 1,
+        fontSize: fs(11),
+        fontWeight: '600',
+    },
+    shiftProgressValue: {
+        fontSize: fs(11),
+        fontWeight: '700',
+    },
+    shiftInfoGrid: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: sp(12),
-        marginTop: sp(2),
+        marginTop: sp(12),
+    },
+    shiftInfoItem: {
+        flex: 1,
+        minWidth: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(6),
+    },
+    shiftInfoCopy: {
+        flex: 1,
+        minWidth: 0,
+    },
+    shiftInfoLabel: {
+        fontSize: fs(9),
+    },
+    shiftInfoValue: {
+        fontSize: fs(11),
+        fontWeight: '700',
+        marginTop: sp(1),
     },
     progressContainer: {
-        marginTop: sp(10),
-        gap: sp(4),
-        width: '90%',
+        marginTop: sp(12),
+        gap: sp(6),
+    },
+    shiftProgressHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: sp(8),
     },
     progressBarBg: {
         height: sp(6),
@@ -1223,49 +1380,45 @@ const styles = StyleSheet.create({
         fontSize: fs(10),
         fontWeight: '600',
     },
-    shiftDetails: {
-        flex: 1,
-    },
-    shiftLabel: {
-        fontSize: fs(12),
-        fontWeight: '500',
-    },
-    shiftStatus: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: sp(2),
+    shiftMetaDescription: {
+        fontSize: fs(10),
+        lineHeight: lh(15),
+        marginTop: sp(10),
     },
     shiftStatusText: {
-        fontSize: fs(15),
+        fontSize: fs(12),
         fontWeight: '700',
     },
     shiftTimer: {
-        fontSize: fs(32),
+        fontSize: fs(21),
         fontWeight: '800',
-        marginTop: sp(6),
-        letterSpacing: -0.5,
-    },
-    shiftStart: {
-        fontSize: fs(11),
-        marginTop: sp(4),
+        lineHeight: lh(24),
+        marginTop: sp(2),
     },
     shiftButton: {
+        minWidth: sp(104),
+        minHeight: sp(44),
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: sp(12),
-        paddingHorizontal: sp(16),
-        borderRadius: sp(14),
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: sp(4),
-        elevation: 4,
-        gap: sp(6),
+        justifyContent: 'center',
+        paddingHorizontal: sp(10),
+        borderRadius: sp(10),
+        gap: sp(5),
     },
     shiftButtonText: {
         color: '#FFFFFF',
-        fontSize: fs(14),
+        fontSize: fs(12),
         fontWeight: '700',
+    },
+    shiftExpandButton: {
+        width: sp(38),
+        height: sp(44),
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: sp(10),
+    },
+    shiftControlPressed: {
+        opacity: 0.72,
     },
     weeklySummaryCard: {
         borderWidth: 1,
@@ -1285,6 +1438,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+    },
+    weeklySummaryHeaderPressed: {
+        opacity: 0.72,
+    },
+    weeklySummaryHeading: {
+        flex: 1,
+        minWidth: 0,
+        paddingRight: sp(8),
+    },
+    weeklySummaryHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(6),
     },
     weeklySummaryTitle: {
         fontSize: fs(14),
@@ -1315,6 +1481,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         paddingHorizontal: sp(6),
         paddingVertical: sp(7),
+    },
+    weeklySummaryMessage: {
+        minHeight: sp(58),
+        borderTopWidth: 1,
+        paddingHorizontal: sp(14),
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: sp(7),
+    },
+    weeklySummaryMessageText: {
+        flexShrink: 1,
+        fontSize: fs(11),
+        fontWeight: '600',
+        textAlign: 'center',
     },
     weeklyDay: {
         flex: 1,

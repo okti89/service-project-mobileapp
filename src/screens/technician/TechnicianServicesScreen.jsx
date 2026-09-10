@@ -19,6 +19,7 @@ import api from '@/api/axios';
 import ENDPOINTS from '@/api/endpoints';
 import { useTheme } from '@/context/ThemeContext';
 import { serviceBlue, serviceGreen } from '@/theme/color';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
 dayjs.locale('tr');
 
@@ -105,7 +106,7 @@ export default function TechnicianServicesScreen({ navigation, route }) {
                     <View style={styles.cardHeader}>
                         <Text style={[styles.cardTime, { color: serviceBlue }]}>{time}</Text>
                         <View style={[styles.badgeContainer, { backgroundColor: status.bgColor }]}>
-                            <Text style={[styles.badgeLabel, { color: status.color }]}>{status.label}</Text>
+                            <Text style={[styles.badgeLabel, { color: status.color }]}>{getServiceStatusLabel(item, status.label)}</Text>
                         </View>
                     </View>
                     <View style={styles.cardBody}>

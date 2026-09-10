@@ -33,6 +33,7 @@ import { spacing } from '@/theme/spacing';
 import Header from '@/components/Header';
 import RouteMapModal from '@/components/common/RouteMapModal';
 import serviceService from '@/services/serviceService';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
 dayjs.locale('tr');
 
@@ -47,18 +48,6 @@ const getStatusColor = (status) => {
             return { color: '#2563EB', bgColor: '#DBEAFE', label: 'Planlandı' };
         default:
             return { color: '#4B5563', bgColor: '#F3F4F6', label: 'Planlandı' };
-    }
-};
-
-const getStatusLabel = (status) => {
-    switch (status) {
-        case 'new': return 'Yeni';
-        case 'assigned': return 'Atandı';
-        case 'in_progress': return 'Devam Ediyor';
-        case 'postponed': return 'Ertelendi';
-        case 'completed': return 'Tamamlandı';
-        case 'cancelled': return 'İptal Edildi';
-        default: return 'Planlandı';
     }
 };
 
@@ -113,7 +102,7 @@ const ServiceCard = ({ item, onPress, onOpenWhatsappSheet, onOpenSmsSheet, onOpe
                 <View style={styles.cardHeader}>
                 <Text style={[styles.cardTime, { color: serviceBlue }]}>{time}</Text>
                 <View style={[styles.badgeContainer, { backgroundColor: badge.bgColor }]}>
-                    <Text style={[styles.badgeLabel, { color: badge.color }]}>{badge.label}</Text>
+                    <Text style={[styles.badgeLabel, { color: badge.color }]}>{getServiceStatusLabel(item, badge.label)}</Text>
                 </View>
             </View>
 
@@ -264,7 +253,7 @@ export default function ServicesScreen({ navigation, route }) {
         }
         const cleanPhone = normalizePhoneForWhatsApp(phone);
         const trackingUrl = buildTrackingUrl(config?.panel_url, selectedService?.id);
-        const statusLabel = getStatusLabel(selectedService?.service_status);
+        const statusLabel = getServiceStatusLabel(selectedService);
         const customerName = selectedService?.customer_full_name || 'Müşterimiz';
         const message = `Sayın ${customerName}\n\nServis kaydınızın durumu: *${statusLabel}*\n\nTakip linki: ${trackingUrl || 'Yok'}`;
         closeCommunicationSheet();
@@ -280,7 +269,7 @@ export default function ServicesScreen({ navigation, route }) {
             return;
         }
         const trackingUrl = buildTrackingUrl(config?.panel_url, selectedService?.id);
-        const statusLabel = getStatusLabel(selectedService?.service_status);
+        const statusLabel = getServiceStatusLabel(selectedService);
         const customerName = selectedService?.customer_full_name || 'Müşterimiz';
         const message = `Sayın ${customerName}, servis kaydınızın durumu: ${statusLabel}. Takip linki: ${trackingUrl || 'Yok'}`;
         closeCommunicationSheet();

@@ -34,6 +34,20 @@ const getShiftMinutes = (shift) => {
     return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
 };
 
+const ATTENDANCE_STATUS_LABELS = {
+    worked: 'Çalıştı',
+    leave: 'İzinli',
+    sick: 'Raporlu',
+    offday: 'Resmi Tatil',
+    absent: 'Devamsız',
+};
+
+const getAttendanceStatusLabel = (item) => (
+    item?.status_display
+    || ATTENDANCE_STATUS_LABELS[item?.status]
+    || 'Kayıt'
+);
+
 export default function ProfileShiftDetailScreen({ route }) {
     const { colors } = useTheme();
     const day = route?.params?.day || {};
@@ -97,7 +111,7 @@ export default function ProfileShiftDetailScreen({ route }) {
                                     <MaterialCommunityIcons name="clipboard-text-outline" size={20} color="#8B5CF6" />
                                 </View>
                                 <View style={styles.cardCopy}>
-                                    <Text style={[styles.cardTitle, { color: colors.text }]}>{item?.status_display || item?.status || 'Kayıt'}</Text>
+                                    <Text style={[styles.cardTitle, { color: colors.text }]}>{getAttendanceStatusLabel(item)}</Text>
                                     <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>{item?.note || 'Ek açıklama bulunmuyor.'}</Text>
                                 </View>
                             </View>

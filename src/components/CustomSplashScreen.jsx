@@ -12,6 +12,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { useConfig } from '@/context/ConfigContext';
+import buildBrand from '@/config/buildBrand';
 
 const CustomSplashScreen = ({ message = 'Yükleniyor', submessage }) => {
     const { colors, isDark } = useTheme();
@@ -47,7 +48,7 @@ const CustomSplashScreen = ({ message = 'Yükleniyor', submessage }) => {
                                 />
                             ) : (
                                 <Image
-                                    source={require('../../assets/logo.png')}
+                                    source={buildBrand.logo}
                                     style={styles.logoImage}
                                 />
                             )}

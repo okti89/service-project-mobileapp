@@ -22,6 +22,7 @@ import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/co
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
 const MONTH_NAMES = [
     'Ocak',
@@ -178,7 +179,7 @@ function SummaryRow({ icon, label, value, accent, colors }) {
 
 function ServiceItem({ item, colors, onPress }) {
     const title = item?.customer_full_name || item?.receipt_number || 'Servis Kaydı';
-    const subtitle = item?.fault_description || item?.service_status_display || item?.service_status || 'Servis detayı';
+    const subtitle = item?.fault_description || getServiceStatusLabel(item, 'Servis detayı');
     const accent = isCompletedService(item) ? serviceGreen : serviceBlue;
 
     return (

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     Pressable,
+    Image,
     StyleSheet,
     Text,
     View,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { serviceBlue, serviceGreen, serviceOrange } from '@/theme/color';
 import WrapperContainer from '@/components/WrapperContainer';
+import buildBrand from '@/config/buildBrand';
 
 const THEME_OPTIONS = [
     { key: 'light', label: 'Açık', icon: 'weather-sunny' },
@@ -43,16 +45,11 @@ export default function LandingScreen({ navigation }) {
                     {/* HEADER: Logo + Title + Theme icons */}
                     <View style={styles.header}>
                         <View style={[styles.logoWrap, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-                            <LinearGradient
-                                colors={[serviceBlue, '#3B82F6']}
-                                style={styles.logoGradient}
-                            >
-                                <MaterialCommunityIcons name="wrench" size={26} color="#FFFFFF" />
-                            </LinearGradient>
+                            <Image source={buildBrand.logo} style={styles.brandLogo} resizeMode="contain" />
                         </View>
                         <View style={styles.titleBlock}>
-                            <Text style={[styles.appName, { color: colors.text }]}>
-                                Servis<Text style={{ color: serviceBlue }}>Asistanı</Text>
+                            <Text style={[styles.appName, buildBrand.isWhiteLabel && styles.whiteLabelAppName, { color: colors.text }]}>
+                                {buildBrand.isWhiteLabel ? buildBrand.name : <>Servis<Text style={{ color: serviceBlue }}>Asistanı</Text></>}
                             </Text>
                             <Text style={[styles.tagline, { color: colors.textSecondary }]}>
                                 Teknik Servis Yönetimi
@@ -369,12 +366,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
-    logoGradient: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
+    brandLogo: {
+        width: 50,
+        height: 50,
     },
     titleBlock: {
         flex: 1,
@@ -383,7 +377,10 @@ const styles = StyleSheet.create({
     appName: {
         fontSize: 26,
         fontWeight: '900',
-        letterSpacing: -0.5,
+        letterSpacing: 0,
+    },
+    whiteLabelAppName: {
+        fontSize: 19,
     },
     tagline: {
         fontSize: 14,

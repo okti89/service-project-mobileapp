@@ -9,6 +9,7 @@ import WrapperContainer from '@/components/WrapperContainer';
 import CustomInput from '@/components/CustomInput';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import buildBrand from '@/config/buildBrand';
 
 const LoginScreen = ({ navigation }) => {
     const { colors, isDark } = useTheme();
@@ -108,7 +109,7 @@ const LoginScreen = ({ navigation }) => {
                 {/* Header Section */}
                 <View style={styles.headerContainer}>
                     <View style={[styles.iconWrapper, { backgroundColor: isDark ? colors.primary + '20' : colors.primaryLight }]}>
-                        <Image style={styles.logo} source={require('../../../assets/logo.png')} />
+                        <Image style={styles.logo} source={buildBrand.logo} />
 
 
                     </View>

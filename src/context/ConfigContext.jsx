@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import companyService from '@/services/companyService';
 import { useAuth } from '@/context/AuthContext';
+import buildBrand from '@/config/buildBrand';
 
 const ConfigContext = createContext(null);
 
 const defaultConfig = {
-    name: 'Servis Yönetim Sistemi',
+    name: buildBrand.name,
     logo: null,
     phone_number: '',
     email: '',
@@ -15,7 +16,7 @@ const defaultConfig = {
 const normalizeConfig = (data) => ({
     ...defaultConfig,
     ...(data || {}),
-    name: data?.name || defaultConfig.name,
+    name: buildBrand.isWhiteLabel ? buildBrand.name : (data?.name || defaultConfig.name),
 });
 
 export const ConfigProvider = ({ children }) => {

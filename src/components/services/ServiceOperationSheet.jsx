@@ -295,8 +295,8 @@ export default function ServiceOperationSheet({
             products.map(p => ({
                 value: p.id,
                 label: p.name || 'Ürün',
-                meta: p.sale_price != null
-                    ? `${Number(p.sale_price).toFixed(2)} TL (Stok: ${p.stock_quantity ?? 0})`
+                meta: (p.sale_price ?? p.price) != null
+                    ? `${Number(p.sale_price ?? p.price).toFixed(2)} TL (Stok: ${p.stock_quantity ?? 0})`
                     : `Stok: ${p.stock_quantity ?? 0}`,
                 _product: p,
             })),
@@ -324,8 +324,9 @@ export default function ServiceOperationSheet({
         if (product) {
             setName(product.name || '');
             setDescription(product.description || '');
-            const salePriceVal = product.sale_price !== null && product.sale_price !== undefined
-                ? Math.round(Number(product.sale_price))
+            const productPrice = product.sale_price ?? product.price;
+            const salePriceVal = productPrice !== null && productPrice !== undefined
+                ? Math.round(Number(productPrice))
                 : 0;
             setUnitPrice(salePriceVal > 0 ? formatAmountDisplay(String(salePriceVal)) : '');
         }
@@ -344,6 +345,7 @@ export default function ServiceOperationSheet({
 
         return {
             service: service.id,
+            ...(selectedProductId ? { product: selectedProductId } : {}),
             name: resolvedName || resolvedDescription,
             description: resolvedDescription,
             quantity: resolvedQuantity,
@@ -358,9 +360,11 @@ export default function ServiceOperationSheet({
             await onSubmit?.(payload, operation);
             onClose?.();
         } catch (error) {
-            const message = error instanceof Error
-                ? error.message
-                : parseError(error, 'İşlem kaydedilemedi.');
+            const message = error?.response
+                ? parseError(error, 'İşlem kaydedilemedi.')
+                : error instanceof Error
+                    ? error.message
+                    : 'İşlem kaydedilemedi.';
             showToast('error', 'Hata', message);
         } finally {
             setSubmitting(false);
@@ -379,9 +383,11 @@ export default function ServiceOperationSheet({
             });
             showToast('success', 'Kayıtlı İşlem', 'İşlem kayıtlı işlemlere eklendi.');
         } catch (error) {
-            const message = error instanceof Error
-                ? error.message
-                : parseError(error, 'İşlem kaydedilemedi.');
+            const message = error?.response
+                ? parseError(error, 'İşlem kaydedilemedi.')
+                : error instanceof Error
+                    ? error.message
+                    : 'İşlem kaydedilemedi.';
             showToast('error', 'Hata', message);
         } finally {
             setSavingTemplate(false);

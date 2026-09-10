@@ -11,6 +11,7 @@ import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/co
 import { resolveMediaUrl } from '@/utils/mediaUrl';
 import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import WrapperContainer, { NO_BOTTOM_EDGES } from '@/components/WrapperContainer';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
 const ONLINE_GREEN = '#22C55E';
 const PURPLE = '#8B5CF6';
@@ -50,7 +51,11 @@ const fmtDate = (v) => { if (!v) return '-'; const d = new Date(v); if (isNaN(d)
 const fmtDT = (v) => { if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return '-'; return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); };
 const fmtLast = (v, on) => { if (on) return 'Şimdi'; if (!v) return '-'; const d = new Date(v); if (isNaN(d)) return '-'; const s = Math.floor((Date.now() - d) / 1000); if (s < 60) return 'Az önce'; if (s < 3600) return Math.floor(s / 60) + ' dk önce'; if (s < 86400) return Math.floor(s / 3600) + ' sa önce'; return fmtDT(v); };
 const svcTitle = (s) => [s?.fault_description, [s?.device_brand, s?.device_model].filter(Boolean).join(' '), s?.customer_full_name, 'Servis Kaydı'].find(Boolean);
-const svcSt = (s) => SVC_STATUS[s?.service_status || (s?.is_completed ? 'completed' : 'assigned')] || { label: 'Servis', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' };
+const svcSt = (s) => {
+    const meta = SVC_STATUS[s?.service_status || (s?.is_completed ? 'completed' : 'assigned')]
+        || { label: 'Servis', color: serviceBlue, bg: 'rgba(59,130,246,0.10)' };
+    return { ...meta, label: getServiceStatusLabel(s, meta.label) };
+};
 const attH = (r) => { if (!r?.start_time || !r?.end_time) return 0; const [sh, sm] = String(r.start_time).split(':').map(Number); const [eh, em] = String(r.end_time).split(':').map(Number); return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60); };
 
 function ABtn({ icon, label, onPress, colors }) {

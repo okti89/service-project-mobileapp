@@ -13,6 +13,16 @@
       "channel": "preview",
       "distribution": "internal"
     },
+    "uygar-apk": {
+      "channel": "uygar-production",
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "uygar"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true

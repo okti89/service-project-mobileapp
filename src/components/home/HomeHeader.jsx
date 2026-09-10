@@ -17,6 +17,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useConfig } from '@/context/ConfigContext';
 import { useAuth } from '@/context/AuthContext';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import buildBrand from '@/config/buildBrand';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -126,10 +127,10 @@ export default function HomeHeader({
                                 resizeMode="contain"
                             />
                         ) : (
-                            <MaterialCommunityIcons
-                                name="domain"
-                                size={22}
-                                color={t.logoFallbackIcon}
+                            <Image
+                                source={buildBrand.logo}
+                                style={styles.logo}
+                                resizeMode="contain"
                             />
                         )}
                     </View>

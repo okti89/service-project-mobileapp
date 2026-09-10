@@ -43,6 +43,7 @@ import { getMapProvider } from '@/config/maps';
 import serviceService from '@/services/serviceService';
 import productService from '@/services/productService';
 import { resolveMediaUrl } from '@/utils/mediaUrl';
+import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
 dayjs.locale('tr');
 
@@ -832,7 +833,7 @@ export default function ServiceDetail({ route, navigation }) {
                             </View>
                             <View style={[styles.statusBadge, { backgroundColor: badge.color + '18' }]}>
                                 <View style={[styles.statusDot, { backgroundColor: badge.color }]} />
-                                <Text style={[styles.statusText, { color: badge.color }]}>{badge.label}</Text>
+                                <Text style={[styles.statusText, { color: badge.color }]}>{getServiceStatusLabel(service, badge.label)}</Text>
                             </View>
                         </View>
 
@@ -1287,7 +1288,7 @@ const GenelTab = ({ service, items, photos, colors, isDark, onCall, onMap, onOpe
     return (
         <View style={styles.tabSection}>
             <Card title="Servis Özeti" icon="clipboard-text-outline" colors={colors} isDark={isDark}>
-                <InfoRow label="Durum" value={service.service_status_name || service.service_status} colors={colors} />
+                <InfoRow label="Durum" value={getServiceStatusLabel(service)} colors={colors} />
                 <InfoRow label="Planlanan" value={service.scheduled_date ? dayjs(service.scheduled_date).format('DD MMMM YYYY HH:mm') : null} colors={colors} />
                 <InfoRow label="Teknisyen" value={service.technician_name} colors={colors} />
             </Card>
@@ -1539,9 +1540,10 @@ const ZamanTab = ({ timeline, colors, isDark }) => (
                 const dotColor = event.new_status_color || '#8B5CF6';
                 const isCreation = !event.old_status || event.old_status === event.new_status || event.old_status === 'new';
 
-                let title = `Durum "${event.new_status_name || event.new_status}" olarak güncellendi.`;
+                const statusLabel = event.new_status_name || getServiceStatusLabel(event.new_status);
+                let title = `Durum "${statusLabel}" olarak güncellendi.`;
                 if (i === timeline.length - 1 && isCreation) {
-                    title = `Servis kaydı "${event.new_status_name || event.new_status}" durumu ile oluşturuldu.`;
+                    title = `Servis kaydı "${statusLabel}" durumu ile oluşturuldu.`;
                 }
 
                 return (

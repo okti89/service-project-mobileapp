@@ -131,10 +131,13 @@ export default function AdminEditUserScreen({ route, navigation }) {
                 first_name: firstName.trim(),
                 last_name: lastName.trim(),
                 phone_number: normalizePhoneTR(phone),
-                role,
+                user_type: role,
                 approval_status: status,
             };
             const res = await api.patch(ENDPOINTS.AUTH.USER_DETAIL(targetUserId), payload);
+            if (res?.data?.user_type !== role) {
+                throw new Error('Kullanıcı rolü sunucuda güncellenemedi.');
+            }
             // Callback ile üst listeyi yerel olarak güncelle
             const onSuccess = route?.params?.onSuccess;
             if (onSuccess) onSuccess(res.data);
