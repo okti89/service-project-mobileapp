@@ -80,6 +80,11 @@ const serviceService = {
         return response?.data;
     },
 
+    deleteAdminService: async (id) => {
+        const response = await api.delete(ENDPOINTS.SERVICES.ADMIN_DETAIL(id));
+        return response?.data;
+    },
+
     createService: async (payload) => {
         const response = await api.post(ENDPOINTS.SERVICES.TECHNICIAN_LIST, payload);
         return response?.data;

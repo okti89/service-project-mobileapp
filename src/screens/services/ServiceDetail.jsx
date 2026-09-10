@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Linking,
     Platform,
     Pressable,
@@ -82,6 +83,7 @@ export default function ServiceDetail({ route, navigation }) {
     const [service, setService] = useState(route?.params?.service || null);
     const [loading, setLoading] = useState(!service);
     const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+    const [serviceDeleteLoading, setServiceDeleteLoading] = useState(false);
     const [techniciansLoading, setTechniciansLoading] = useState(false);
     const [technicians, setTechnicians] = useState([]);
     const [statusOptions, setStatusOptions] = useState(FALLBACK_SERVICE_STATUS_OPTIONS);
@@ -763,6 +765,37 @@ export default function ServiceDetail({ route, navigation }) {
         await fetchService();
     }, [fetchService]);
 
+    const handleServiceDelete = useCallback(() => {
+        if (!isAdmin || !service?.id || serviceDeleteLoading) return;
+
+        Alert.alert(
+            'Servisi Sil',
+            `#${service.receipt_number || 'Servis'} numaralı kayıt kalıcı olarak silinecek. Bu işlem geri alınamaz.`,
+            [
+                { text: 'Vazgeç', style: 'cancel' },
+                {
+                    text: 'Kalıcı Olarak Sil',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setServiceDeleteLoading(true);
+                            await serviceService.deleteAdminService(service.id);
+                            showToast('success', 'Servis Silindi', 'Servis kaydı başarıyla silindi.');
+                            if (navigation?.canGoBack?.()) navigation.goBack();
+                        } catch (error) {
+                            const message = error?.response?.data?.detail
+                                || error?.response?.data?.error
+                                || 'Servis kaydı silinemedi.';
+                            showToast('error', 'Silinemedi', message);
+                        } finally {
+                            setServiceDeleteLoading(false);
+                        }
+                    },
+                },
+            ],
+        );
+    }, [isAdmin, navigation, service, serviceDeleteLoading, showToast]);
+
     if (loading) {
         return (
             <WrapperContainer edges={NO_BOTTOM_EDGES}>
@@ -810,7 +843,15 @@ export default function ServiceDetail({ route, navigation }) {
                                 onSuccess: fetchService
                             }),
                             accessibilityLabel: 'Düzenle'
-                        }
+                        },
+                        {
+                            icon: serviceDeleteLoading ? 'progress-clock' : 'trash-can-outline',
+                            onPress: handleServiceDelete,
+                            accessibilityLabel: 'Servisi Sil',
+                            color: '#DC2626',
+                            backgroundColor: '#DC262614',
+                            borderColor: '#DC262633',
+                        },
                     ] : undefined}
                 />
 
@@ -1282,7 +1323,10 @@ const Card = ({ title, icon, children, colors, isDark, rightAction }) => (
 const GenelTab = ({ service, items, photos, colors, isDark, onCall, onMap, onOpenPhotos }) => {
     const totalPrice = parseFloat(service.total_price) || 0;
     const totalPaid = parseFloat(service.total_paid) || 0;
-    const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
+    const rawRemaining = service.remaining_balance !== null && service.remaining_balance !== undefined
+        ? Number(service.remaining_balance)
+        : totalPrice - totalPaid;
+    const remaining = Math.max(0, Number.isFinite(rawRemaining) ? rawRemaining : totalPrice - totalPaid);
     const warrantyMonths = service.warranty_certificate ? 24 : null;
 
     return (
@@ -1314,11 +1358,11 @@ const GenelTab = ({ service, items, photos, colors, isDark, onCall, onMap, onOpe
                     <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Toplam Tutar</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
-                    <MaterialCommunityIcons name="currency-try" size={18} color={remaining > 0 ? '#EF4444' : '#16A34A'} />
+                    <MaterialCommunityIcons name={remaining > 0 ? 'currency-try' : 'check-circle-outline'} size={18} color={remaining > 0 ? '#EF4444' : '#16A34A'} />
                     <Text style={[styles.statValue, { color: remaining > 0 ? '#EF4444' : colors.text }]}>
-                        {formatCurrency(remaining)}
+                        {remaining > 0 ? formatCurrency(remaining) : 'Tamamlandı'}
                     </Text>
-                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Kalan Ödeme</Text>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{remaining > 0 ? 'Kalan Ödeme' : 'Ödeme Durumu'}</Text>
                 </View>
                 {warrantyMonths ? (
                     <View style={[styles.statCard, { backgroundColor: isDark ? colors.surface : '#fff', borderColor: colors.border }]}>
@@ -1444,7 +1488,10 @@ const IslemlerTab = ({ items, colors, isDark, onAdd, onEdit }) => {
 const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectRemaining }) => {
     const totalPrice = parseFloat(service.total_price) || 0;
     const totalPaid = parseFloat(service.total_paid) || 0;
-    const remaining = parseFloat(service.remaining_balance) || (totalPrice - totalPaid);
+    const rawRemaining = service.remaining_balance !== null && service.remaining_balance !== undefined
+        ? Number(service.remaining_balance)
+        : totalPrice - totalPaid;
+    const remaining = Math.max(0, Number.isFinite(rawRemaining) ? rawRemaining : totalPrice - totalPaid);
     const paymentProgress = totalPrice > 0 ? Math.min(Math.max((totalPaid / totalPrice) * 100, 0), 100) : 0;
 
     return (
@@ -1462,16 +1509,18 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                 isDark={isDark}
                 rightAction={
                     <View style={styles.inlineHeaderActions}>
-                        <Pressable
-                            onPress={onCollectRemaining}
-                            style={({ pressed }) => [
-                                styles.inlineHeaderAction,
-                                { backgroundColor: '#16A34A14', borderColor: '#16A34A33', opacity: pressed ? 0.75 : 1 },
-                            ]}
-                        >
-                            <MaterialCommunityIcons name="lightning-bolt" size={16} color="#16A34A" />
-                            <Text style={[styles.inlineHeaderActionText, { color: '#15803D' }]}>{'Tamamını Al'}</Text>
-                        </Pressable>
+                        {remaining > 0 ? (
+                            <Pressable
+                                onPress={onCollectRemaining}
+                                style={({ pressed }) => [
+                                    styles.inlineHeaderAction,
+                                    { backgroundColor: '#16A34A14', borderColor: '#16A34A33', opacity: pressed ? 0.75 : 1 },
+                                ]}
+                            >
+                                <MaterialCommunityIcons name="lightning-bolt" size={16} color="#16A34A" />
+                                <Text style={[styles.inlineHeaderActionText, { color: '#15803D' }]}>{'Tamamını Al'}</Text>
+                            </Pressable>
+                        ) : null}
                         <Pressable
                             onPress={onAdd}
                             style={({ pressed }) => [
@@ -1494,8 +1543,10 @@ const OdemeTab = ({ service, payments, colors, isDark, onAdd, onEdit, onCollectR
                     <Text style={[styles.payValue, { color: '#16A34A' }]}>{formatCurrency(totalPaid)}</Text>
                 </View>
                 <View style={[styles.payRow, styles.payRowLast, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>Kalan</Text>
-                    <Text style={[styles.payValue, { color: remaining > 0 ? '#EF4444' : '#16A34A', fontWeight: '800' }]}>{formatCurrency(remaining)}</Text>
+                    <Text style={[styles.payLabel, { color: colors.textSecondary }]}>{remaining > 0 ? 'Kalan' : 'Durum'}</Text>
+                    <Text style={[styles.payValue, { color: remaining > 0 ? '#EF4444' : '#16A34A', fontWeight: '800' }]}>
+                        {remaining > 0 ? formatCurrency(remaining) : 'Ödeme Tamamlandı'}
+                    </Text>
                 </View>
             </Card>
 

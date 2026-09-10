@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     ActivityIndicator,
     Alert,
@@ -197,9 +198,9 @@ export default function ServicesScreen({ navigation, route }) {
         }
     }, [selectedDate, activeTab, viewMode, isAdmin, customerId]);
 
-    useEffect(() => {
+    useFocusEffect(useCallback(() => {
         fetchServices();
-    }, [fetchServices]);
+    }, [fetchServices]));
 
     const handlePrev = () => setSelectedDate((prev) => dayjs(prev).subtract(1, viewMode).toDate());
     const handleNext = () => setSelectedDate((prev) => dayjs(prev).add(1, viewMode).toDate());

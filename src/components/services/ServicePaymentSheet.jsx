@@ -212,7 +212,7 @@ export default function ServicePaymentSheet({
     const [submitting, setSubmitting] = useState(false);
 
     const isEditMode = Boolean(payment?.id);
-    const remainingBalance = Number(service?.remaining_balance ?? 0);
+    const remainingBalance = Math.max(0, Number(service?.remaining_balance ?? 0));
 
     useEffect(() => {
         if (!visible) {
@@ -342,9 +342,11 @@ export default function ServicePaymentSheet({
                 {/* ── Özet Kart ── */}
                 <View style={[styles.summaryCard, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
                     <View style={styles.summaryCol}>
-                        <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Kalan bakiye</Text>
+                        <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                            {remainingBalance > 0 ? 'Kalan bakiye' : 'Durum'}
+                        </Text>
                         <Text style={[styles.summaryValue, { color: remainingBalance > 0 ? colors.error : colors.success }]}>
-                            {formatCurrency(remainingBalance)}
+                            {remainingBalance > 0 ? formatCurrency(remainingBalance) : 'Ödeme Tamamlandı'}
                         </Text>
                     </View>
                     <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
@@ -357,21 +359,23 @@ export default function ServicePaymentSheet({
                 </View>
 
                 {/* ── Kalan Tutarı Doldur ── */}
-                <Pressable
-                    onPress={handleFillRemaining}
-                    disabled={submitting}
-                    style={({ pressed }) => [
-                        styles.fullPaymentButton,
-                        {
-                            backgroundColor: 'rgba(16,185,129,0.10)',
-                            borderColor: 'rgba(16,185,129,0.32)',
-                            opacity: pressed || submitting ? 0.75 : 1,
-                        },
-                    ]}
-                >
-                    <MaterialCommunityIcons name="lightning-bolt-circle" size={18} color="#059669" />
-                    <Text style={styles.fullPaymentText}>Kalanın Tamamını Doldur</Text>
-                </Pressable>
+                {remainingBalance > 0 ? (
+                    <Pressable
+                        onPress={handleFillRemaining}
+                        disabled={submitting}
+                        style={({ pressed }) => [
+                            styles.fullPaymentButton,
+                            {
+                                backgroundColor: 'rgba(16,185,129,0.10)',
+                                borderColor: 'rgba(16,185,129,0.32)',
+                                opacity: pressed || submitting ? 0.75 : 1,
+                            },
+                        ]}
+                    >
+                        <MaterialCommunityIcons name="lightning-bolt-circle" size={18} color="#059669" />
+                        <Text style={styles.fullPaymentText}>Kalanın Tamamını Doldur</Text>
+                    </Pressable>
+                ) : null}
 
                 {/* ── Ödeme Yöntemi Seçimi ── */}
                 {paymentMethodsLoading ? (
