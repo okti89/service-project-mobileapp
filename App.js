@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { AppState, Platform, View, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from 'expo-splash-screen';
@@ -26,6 +26,67 @@ import { NetworkProvider } from "@/context/NetworkContext";
 // Keep the native splash visible while fonts and the initial auth state load.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+const UPDATE_CHECK_INTERVAL_MS = 60 * 1000;
+
+const AutoUpdate = () => {
+  const { isUpdatePending, isChecking, isDownloading, lastCheckForUpdateTimeSinceRestart } = Updates.useUpdates();
+  const appState = useRef(AppState.currentState);
+  const lastCheckAt = useRef(0);
+  const checking = useRef(false);
+  const nativeBusy = useRef(false);
+  const updatePending = useRef(false);
+
+  useEffect(() => {
+    nativeBusy.current = isChecking || isDownloading;
+    updatePending.current = isUpdatePending;
+    if (lastCheckForUpdateTimeSinceRestart) {
+      lastCheckAt.current = Math.max(lastCheckAt.current, lastCheckForUpdateTimeSinceRestart.getTime());
+    }
+  }, [isChecking, isDownloading, isUpdatePending, lastCheckForUpdateTimeSinceRestart]);
+
+  useEffect(() => {
+    if (!__DEV__ && Updates.isEnabled && isUpdatePending) {
+      Updates.reloadAsync().catch((error) => console.warn('OTA reload failed:', error));
+    }
+  }, [isUpdatePending]);
+
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return undefined;
+
+    const checkForUpdates = async () => {
+      const now = Date.now();
+      if (checking.current || nativeBusy.current || updatePending.current ||
+          appState.current !== 'active' ||
+          now - lastCheckAt.current < UPDATE_CHECK_INTERVAL_MS) return;
+
+      checking.current = true;
+      lastCheckAt.current = now;
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (result.isAvailable) await Updates.fetchUpdateAsync();
+      } catch (error) {
+        console.warn('OTA update check failed:', error);
+      } finally {
+        checking.current = false;
+      }
+    };
+
+    const startupCheck = setTimeout(checkForUpdates, 3000);
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returningToForeground = appState.current !== 'active' && nextState === 'active';
+      appState.current = nextState;
+      if (returningToForeground) checkForUpdates();
+    });
+
+    return () => {
+      clearTimeout(startupCheck);
+      subscription.remove();
+    };
+  }, []);
+
+  return null;
+};
+
 
 
 
@@ -40,6 +101,7 @@ const AppContent = ({ onLayoutRootView, isAppReady }) => {
       onLayout={onLayoutRootView}
     >
       <NavigationContainer ref={navigationRef}>
+        {Platform.OS !== 'web' && <AutoUpdate />}
         <StackNavigation />
         <FloatingTracker />
         <StatusBar
@@ -72,27 +134,6 @@ export default function App() {
           'Inter-Bold': require('./assets/fonts/Inter_18pt-Bold.ttf'),
         });
 
-        // OTA Update Control
-        if (!__DEV__) {
-          setTimeout(async () => {
-            try {
-              const update =
-                await Updates.checkForUpdateAsync();
-
-              if (update.isAvailable) {
-                await Updates.fetchUpdateAsync();
-
-              }
-            } catch (error) {
-              if (__DEV__) {
-                console.log(
-                  'OTA Update Error:',
-                  error
-                );
-              }
-            }
-          }, 3000);
-        }
       } catch (error) {
         if (__DEV__) {
           console.log(

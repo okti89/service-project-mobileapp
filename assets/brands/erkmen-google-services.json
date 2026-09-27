@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "284312120637",
+    "project_id": "notification-74e0e",
+    "storage_bucket": "notification-74e0e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:284312120637:android:b26239bb2e0530ae4a6954",
+        "android_client_info": {
+          "package_name": "com.omer.servisapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOUH_gXfJd9nugxl2FF7qDUaLgI_zuOFM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

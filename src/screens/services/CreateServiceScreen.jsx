@@ -11,7 +11,7 @@ import {
     View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal } from '@gorhom/bottom-sheet';
+import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import dayjs from 'dayjs';
 import 'dayjs/locale/tr';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,7 +44,7 @@ const initialFormState = () => ({
     deviceBrand: null,
     deviceModel: null,
     faultDescription: '',
-    notes: '',
+    description: '',
     technician: null,
     scheduledDate: dayjs().add(1, 'hour').startOf('hour').toDate(),
 });
@@ -106,6 +106,12 @@ const SectionTitle = ({ title, colors }) => (
     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{title}</Text>
 );
 
+const ServiceTextInput = ({ initialValue, ...props }) => {
+    // Keep the native editor in control while the keyboard composes text.
+    const defaultValue = useRef(initialValue || '').current;
+    return <TextInput {...props} defaultValue={defaultValue} />;
+};
+
 const TIME_OPTIONS = [
     '09:00', '09:30', '10:00', '10:30',
     '11:00', '11:30', '13:00', '13:30',
@@ -115,62 +121,33 @@ const TIME_OPTIONS = [
 
 const buildDateOptions = () => Array.from({ length: 21 }, (_, index) => dayjs().add(index, 'day'));
 
-const InlineSelect = ({ label, value, options, onSelect, loading, colors, error }) => {
-    const [open, setOpen] = useState(false);
-
-    return (
-        <View style={styles.fieldWrap}>
-            <Text style={[styles.fieldLabel, { color: error ? serviceRed : colors.textSecondary }]}>{label}</Text>
-            <Pressable
-                onPress={() => setOpen((prev) => !prev)}
-                style={({ pressed }) => [
-                    styles.fieldInput,
-                    {
-                        backgroundColor: colors.surface,
-                        borderColor: error ? serviceRed : open ? serviceBlue : colors.border,
-                        opacity: pressed ? 0.9 : 1,
-                    },
-                ]}
-            >
-                <Text style={[styles.fieldInputText, { color: value ? colors.text : colors.textTertiary }]} numberOfLines={1}>
-                    {value || 'Seçiniz'}
-                </Text>
-                <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
-            </Pressable>
-            {open ? (
-                <View style={[styles.optionsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {loading ? (
-                        <View style={styles.optionsLoading}><ActivityIndicator size="small" color={serviceBlue} /></View>
-                    ) : options.length === 0 ? (
-                        <Text style={[styles.optionsEmpty, { color: colors.textTertiary }]}>Seçenek bulunamadı</Text>
-                    ) : (
-                        <ScrollView style={styles.optionsScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                            {options.map((option) => (
-                                <Pressable
-                                    key={String(option.id)}
-                                    onPress={() => {
-                                        onSelect(option);
-                                        setOpen(false);
-                                    }}
-                                    style={({ pressed }) => [
-                                        styles.optionRow,
-                                        {
-                                            borderBottomColor: colors.divider,
-                                            backgroundColor: pressed ? `${serviceBlue}10` : 'transparent',
-                                        },
-                                    ]}
-                                >
-                                    <Text style={[styles.optionText, { color: colors.text }]}>{option.name}</Text>
-                                </Pressable>
-                            ))}
-                        </ScrollView>
-                    )}
-                </View>
-            ) : null}
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
-    );
-};
+const DeviceSelect = ({ label, value, onPress, colors, error, disabled = false, loading = false }) => (
+    <View style={styles.fieldWrap}>
+        <Text style={[styles.fieldLabel, { color: error ? serviceRed : colors.textSecondary }]}>{label}</Text>
+        <Pressable
+            disabled={disabled || loading}
+            onPress={onPress}
+            style={({ pressed }) => [
+                styles.fieldInput,
+                {
+                    backgroundColor: colors.surface,
+                    borderColor: error ? serviceRed : colors.border,
+                    opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
+                },
+            ]}
+        >
+            <Text style={[styles.fieldInputText, { color: value ? colors.text : colors.textTertiary }]} numberOfLines={1}>
+                {loading ? 'Yükleniyor...' : value || (disabled ? 'Önce marka seçin' : 'Seçiniz')}
+            </Text>
+            {loading ? (
+                <ActivityIndicator size="small" color={serviceBlue} />
+            ) : (
+                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+            )}
+        </Pressable>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+);
 
 const CreateOptionRow = ({ value, onChangeText, onCreate, placeholder, disabled, loading, colors }) => (
     <View style={[styles.createRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -199,12 +176,15 @@ const CreateOptionRow = ({ value, onChangeText, onCreate, placeholder, disabled,
 
 export default function CreateServiceScreen({ route, navigation }) {
     const service = route?.params?.service || null;
+    const prefilledCustomer = route?.params?.prefilledCustomer || null;
     const isEdit = !!service;
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
     const { showToast } = useToast();
     const [showCustomerPicker, setShowCustomerPicker] = useState(false);
     const [showAppointmentPicker, setShowAppointmentPicker] = useState(false);
+    const [devicePickerKind, setDevicePickerKind] = useState(null);
+    const [devicePickerQuery, setDevicePickerQuery] = useState('');
     const techPickerRef = useRef(null);
 
     const [form, setForm] = useState(() => {
@@ -218,14 +198,24 @@ export default function CreateServiceScreen({ route, navigation }) {
                 deviceBrand: service.device_brand ? { id: service.device_brand, name: service.device_brand_name } : null,
                 deviceModel: service.device_model ? { id: service.device_model, name: service.device_model_name } : null,
                 faultDescription: service.fault_description || '',
-                notes: service.notes || '',
+                description: service.description || '',
                 technician: service.technician ? { id: service.technician, user: { first_name: service.technician_name.split(' ')[0] || '', last_name: service.technician_name.split(' ').slice(1).join(' ') || '' } } : null,
                 scheduledDate: service.scheduled_date ? dayjs(service.scheduled_date).toDate() : dayjs().add(1, 'hour').startOf('hour').toDate(),
+            };
+        }
+        if (prefilledCustomer) {
+            return {
+                ...initialFormState(),
+                customer: { id: prefilledCustomer.id, full_name: prefilledCustomer.full_name || '' },
+                fullName: prefilledCustomer.full_name || '',
+                phone: formatPhoneInput(prefilledCustomer.phone_number || ''),
+                address: prefilledCustomer.address || '',
             };
         }
         return initialFormState();
     });
     const [errors, setErrors] = useState({});
+    const [customerInputRevision, setCustomerInputRevision] = useState(0);
     const [submitting, setSubmitting] = useState(false);
 
     const [customers, setCustomers] = useState([]);
@@ -251,10 +241,6 @@ export default function CreateServiceScreen({ route, navigation }) {
     const [creatingType, setCreatingType] = useState(false);
     const [creatingBrand, setCreatingBrand] = useState(false);
     const [creatingModel, setCreatingModel] = useState(false);
-    const renderBackdrop = useCallback((props) => (
-        <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.45} pressBehavior="close" />
-    ), []);
-
     const updateField = useCallback((key, value) => {
         setForm((prev) => ({ ...prev, [key]: value }));
         setErrors((prev) => {
@@ -327,6 +313,62 @@ export default function CreateServiceScreen({ route, navigation }) {
         return models.filter((item) => String(item?.brand) === String(form.deviceBrand.id));
     }, [form.deviceBrand?.id, models]);
 
+    const devicePickerConfig = useMemo(() => {
+        const configs = {
+            type: {
+                title: 'Cihaz Türü Seç',
+                searchPlaceholder: 'Cihaz türü ara',
+                options: deviceTypes,
+                selectedId: form.deviceType?.id,
+                loading: deviceTypesLoading,
+            },
+            brand: {
+                title: 'Marka Seç',
+                searchPlaceholder: 'Marka ara',
+                options: brands,
+                selectedId: form.deviceBrand?.id,
+                loading: brandsLoading,
+            },
+            model: {
+                title: 'Model Seç',
+                searchPlaceholder: 'Model ara',
+                options: filteredModels,
+                selectedId: form.deviceModel?.id,
+                loading: modelsLoading,
+            },
+        };
+        return configs[devicePickerKind] || null;
+    }, [brands, brandsLoading, devicePickerKind, deviceTypes, deviceTypesLoading, filteredModels, form.deviceBrand?.id, form.deviceModel?.id, form.deviceType?.id, modelsLoading]);
+
+    const devicePickerOptions = useMemo(() => {
+        const options = devicePickerConfig?.options || [];
+        const query = devicePickerQuery.trim().toLocaleLowerCase('tr-TR');
+        if (!query) return options;
+        return options.filter((item) => String(item?.name || '').toLocaleLowerCase('tr-TR').includes(query));
+    }, [devicePickerConfig?.options, devicePickerQuery]);
+
+    const openDevicePicker = useCallback((kind) => {
+        setDevicePickerQuery('');
+        setDevicePickerKind(kind);
+    }, []);
+
+    const closeDevicePicker = useCallback(() => {
+        setDevicePickerKind(null);
+        setDevicePickerQuery('');
+    }, []);
+
+    const handleDeviceSelect = useCallback((item) => {
+        if (devicePickerKind === 'type') {
+            updateField('deviceType', item);
+        } else if (devicePickerKind === 'brand') {
+            updateField('deviceBrand', item);
+            updateField('deviceModel', null);
+        } else if (devicePickerKind === 'model') {
+            updateField('deviceModel', item);
+        }
+        closeDevicePicker();
+    }, [closeDevicePicker, devicePickerKind, updateField]);
+
     const handlePickCustomer = useCallback((customer) => {
         setForm((prev) => ({
             ...prev,
@@ -335,6 +377,7 @@ export default function CreateServiceScreen({ route, navigation }) {
             phone: formatPhoneInput(customer?.phone_number || customer?.phone || prev.phone),
             address: customer?.address || prev.address,
         }));
+        setCustomerInputRevision((revision) => revision + 1);
         setCustomerQuery('');
         setShowCustomerPicker(false);
     }, []);
@@ -408,14 +451,13 @@ export default function CreateServiceScreen({ route, navigation }) {
                 customer_phone: normalizePhoneForApi(form.phone),
                 customer_address: form.address.trim(),
                 fault_description: form.faultDescription.trim(),
+                description: form.description.trim(),
                 scheduled_date: dayjs(form.scheduledDate).format('YYYY-MM-DDTHH:mm:ss'),
                 device_type: form.deviceType?.id || null,
                 device_brand: form.deviceBrand?.id || null,
                 device_model: form.deviceModel?.id || null,
                 technician: form.technician?.id || null,
             };
-            if (form.notes?.trim()) payload.notes = form.notes.trim();
-
             if (isEdit) {
                 await api.patch(ENDPOINTS.SERVICES.ADMIN_DETAIL(service.id), payload);
                 showToast?.('success', 'Servis', 'Servis başarıyla güncellendi');
@@ -471,26 +513,32 @@ export default function CreateServiceScreen({ route, navigation }) {
     }, [form.scheduledDate, updateField]);
 
     const renderInput = (key, label, options = {}) => {
-        if (options.multiline) {
+        if (!options.phone) {
             return (
                 <View style={styles.fieldWrap}>
                     <Text style={[styles.fieldLabel, { color: errors[key] ? serviceRed : colors.textSecondary }]}>
                         {label}
                         {options.required ? <Text style={{ color: serviceRed }}> *</Text> : null}
                     </Text>
-                    <TextInput
-                        value={form[key]}
+                    <ServiceTextInput
+                        key={`${key}-${key === 'address' || key === 'fullName' ? customerInputRevision : 0}`}
+                        initialValue={form[key]}
                         onChangeText={(text) => updateField(key, text)}
                         placeholder={options.placeholder || label}
                         placeholderTextColor={colors.textTertiary}
                         keyboardType={options.keyboardType}
-                        multiline
-                        numberOfLines={4}
-                        textAlignVertical="top"
+                        autoCorrect={false}
+                        spellCheck={false}
+                        autoComplete="off"
+                        importantForAutofill="no"
+                        multiline={Boolean(options.multiline)}
+                        numberOfLines={options.multiline ? 4 : 1}
+                        textAlignVertical={options.multiline ? 'top' : 'center'}
+                        textBreakStrategy="simple"
                         style={[
                             styles.textInput,
-                            styles.textArea,
-                            styles.nativeTextArea,
+                            options.multiline && styles.textArea,
+                            options.multiline && styles.nativeTextArea,
                             {
                                 backgroundColor: colors.surface,
                                 borderColor: errors[key] ? serviceRed : colors.border,
@@ -507,9 +555,10 @@ export default function CreateServiceScreen({ route, navigation }) {
             <CustomInput
                 label={`${label}${options.required ? ' *' : ''}`}
                 value={form[key]}
-                onChangeText={(text) => updateField(key, text)}
+                onChangeText={(text) => updateField(key, options.phone ? formatPhoneInput(text) : text)}
                 error={errors[key]}
                 isPhone={options.phone}
+                disableSmartFormat
                 keyboardType={options.keyboardType}
                 placeholder={options.placeholder || label}
             />
@@ -602,7 +651,7 @@ export default function CreateServiceScreen({ route, navigation }) {
                         {/* Cihaz Türü */}
                         <View style={styles.deviceRow}>
                             <View style={{ flex: 1 }}>
-                                <InlineSelect label="Cihaz türü" value={form.deviceType?.name} options={deviceTypes.map((item) => ({ id: item.id, name: item.name }))} onSelect={(option) => updateField('deviceType', deviceTypes.find((item) => String(item.id) === String(option.id)) || null)} loading={deviceTypesLoading} colors={colors} error={errors.device_type} />
+                                <DeviceSelect label="Cihaz türü" value={form.deviceType?.name} onPress={() => openDevicePicker('type')} loading={deviceTypesLoading} colors={colors} error={errors.device_type} />
                             </View>
                             <Pressable onPress={() => setShowAddType(p => !p)} style={[styles.addToggleBtn, { backgroundColor: showAddType ? serviceBlue + '18' : colors.surface, borderColor: showAddType ? serviceBlue : colors.border }]}>
                                 <MaterialCommunityIcons name={showAddType ? 'close' : 'plus'} size={18} color={showAddType ? serviceBlue : colors.textSecondary} />
@@ -615,7 +664,7 @@ export default function CreateServiceScreen({ route, navigation }) {
                         {/* Marka */}
                         <View style={styles.deviceRow}>
                             <View style={{ flex: 1 }}>
-                                <InlineSelect label="Marka" value={form.deviceBrand?.name} options={brands.map((item) => ({ id: item.id, name: item.name }))} onSelect={(option) => { const brand = brands.find((item) => String(item.id) === String(option.id)) || null; updateField('deviceBrand', brand); updateField('deviceModel', null); }} loading={brandsLoading} colors={colors} error={errors.device_brand} />
+                                <DeviceSelect label="Marka" value={form.deviceBrand?.name} onPress={() => openDevicePicker('brand')} loading={brandsLoading} colors={colors} error={errors.device_brand} />
                             </View>
                             <Pressable onPress={() => setShowAddBrand(p => !p)} style={[styles.addToggleBtn, { backgroundColor: showAddBrand ? serviceBlue + '18' : colors.surface, borderColor: showAddBrand ? serviceBlue : colors.border }]}>
                                 <MaterialCommunityIcons name={showAddBrand ? 'close' : 'plus'} size={18} color={showAddBrand ? serviceBlue : colors.textSecondary} />
@@ -628,7 +677,7 @@ export default function CreateServiceScreen({ route, navigation }) {
                         {/* Model */}
                         <View style={styles.deviceRow}>
                             <View style={{ flex: 1 }}>
-                                <InlineSelect label="Model" value={form.deviceModel?.name} options={filteredModels.map((item) => ({ id: item.id, name: item.name }))} onSelect={(option) => updateField('deviceModel', filteredModels.find((item) => String(item.id) === String(option.id)) || null)} loading={modelsLoading} colors={colors} error={errors.device_model} />
+                                <DeviceSelect label="Model" value={form.deviceModel?.name} onPress={() => openDevicePicker('model')} disabled={!form.deviceBrand?.id} loading={modelsLoading} colors={colors} error={errors.device_model} />
                             </View>
                             <Pressable onPress={() => setShowAddModel(p => !p)} disabled={!form.deviceBrand?.id} style={[styles.addToggleBtn, { backgroundColor: showAddModel ? serviceBlue + '18' : colors.surface, borderColor: showAddModel ? serviceBlue : colors.border, opacity: form.deviceBrand?.id ? 1 : 0.4 }]}>
                                 <MaterialCommunityIcons name={showAddModel ? 'close' : 'plus'} size={18} color={showAddModel ? serviceBlue : colors.textSecondary} />
@@ -640,9 +689,9 @@ export default function CreateServiceScreen({ route, navigation }) {
                     </View>
 
                     <View style={styles.section}>
-                        <SectionTitle title="ARIZA VE NOTLAR" colors={colors} />
+                        <SectionTitle title="ARIZA VE AÇIKLAMA" colors={colors} />
                         {renderInput('faultDescription', 'Arıza açıklaması', { multiline: true, placeholder: 'Cihazdaki sorunu kısaca açıklayın' })}
-                        {renderInput('notes', 'Notlar (opsiyonel)', { multiline: true, placeholder: 'Servis notu, iç bilgi veya talimatlar...' })}
+                        {renderInput('description', 'Açıklama', { multiline: true, placeholder: 'Servis açıklamasını yazın' })}
                     </View>
 
 
@@ -695,6 +744,73 @@ export default function CreateServiceScreen({ route, navigation }) {
                 </View>
             </AppBottomSheet>
 
+            <AppBottomSheet
+                visible={Boolean(devicePickerConfig)}
+                onClose={closeDevicePicker}
+                snapPoints={['68%']}
+                wrapContent={false}
+            >
+                <View style={styles.sheetContainer}>
+                    <View style={styles.sheetHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.sheetTitle, { color: colors.text }]}>{devicePickerConfig?.title || 'Seçim Yap'}</Text>
+                            <Text style={[styles.deviceSheetSubtitle, { color: colors.textSecondary }]}>Bir seçenek belirleyin</Text>
+                        </View>
+                        <Pressable onPress={closeDevicePicker} style={styles.sheetCloseBtn}>
+                            <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+                        </Pressable>
+                    </View>
+
+                    <View style={[styles.searchBox, { backgroundColor: colors.surfaceMuted || colors.surface, borderColor: colors.border }]}>
+                        <MaterialCommunityIcons name="magnify" size={18} color={colors.textTertiary} />
+                        <TextInput
+                            value={devicePickerQuery}
+                            onChangeText={setDevicePickerQuery}
+                            autoCorrect={false}
+                            spellCheck={false}
+                            placeholder={devicePickerConfig?.searchPlaceholder || 'Ara'}
+                            placeholderTextColor={colors.textTertiary}
+                            style={[styles.searchInput, { color: colors.text }]}
+                        />
+                    </View>
+
+                    <BottomSheetFlatList
+                        data={devicePickerConfig?.loading ? [] : devicePickerOptions}
+                        keyExtractor={(item) => String(item.id)}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={devicePickerOptions.length ? styles.deviceOptionList : styles.emptyListContent}
+                        renderItem={({ item }) => {
+                            const selected = String(item.id) === String(devicePickerConfig?.selectedId);
+                            return (
+                                <Pressable
+                                    onPress={() => handleDeviceSelect(item)}
+                                    style={({ pressed }) => [
+                                        styles.deviceOption,
+                                        {
+                                            backgroundColor: selected ? `${serviceBlue}12` : colors.surface,
+                                            borderColor: selected ? `${serviceBlue}66` : colors.border,
+                                            opacity: pressed ? 0.88 : 1,
+                                        },
+                                    ]}
+                                >
+                                    <Text style={[styles.deviceOptionText, { color: selected ? serviceBlue : colors.text }]} numberOfLines={1}>{item.name}</Text>
+                                    {selected ? <MaterialCommunityIcons name="check-circle" size={20} color={serviceBlue} /> : null}
+                                </Pressable>
+                            );
+                        }}
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                {devicePickerConfig?.loading ? (
+                                    <ActivityIndicator size="small" color={serviceBlue} />
+                                ) : (
+                                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Seçenek bulunamadı</Text>
+                                )}
+                            </View>
+                        }
+                    />
+                </View>
+            </AppBottomSheet>
+
             <TechnicianPickerSheet
                 ref={techPickerRef}
                 technicians={technicians}
@@ -721,12 +837,6 @@ const styles = StyleSheet.create({
     fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
     fieldInput: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
     fieldInputText: { flex: 1, fontSize: 14, fontWeight: '500' },
-    optionsBox: { marginTop: 6, borderRadius: 12, borderWidth: 1, maxHeight: 180, overflow: 'hidden' },
-    optionsScroll: { maxHeight: 180 },
-    optionsLoading: { padding: spacing.m, alignItems: 'center' },
-    optionsEmpty: { padding: spacing.m, fontSize: 13, textAlign: 'center' },
-    optionRow: { paddingHorizontal: spacing.m, paddingVertical: spacing.s + 2, borderBottomWidth: StyleSheet.hairlineWidth },
-    optionText: { fontSize: 14, fontWeight: '500' },
     createRow: { borderWidth: 1, borderRadius: 14, padding: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginTop: 6, marginBottom: spacing.m },
     createInput: { flex: 1, minHeight: 40, fontSize: 14, fontWeight: '500', paddingHorizontal: spacing.s },
     createButton: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -767,10 +877,14 @@ const styles = StyleSheet.create({
     sheetContainer: { flex: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.s },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.m },
     sheetTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+    deviceSheetSubtitle: { marginTop: 3, fontSize: 12, fontWeight: '500' },
     sheetCloseBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     searchBox: { minHeight: 48, borderWidth: 1, borderRadius: 14, paddingHorizontal: spacing.m, marginBottom: spacing.m, flexDirection: 'row', alignItems: 'center', gap: spacing.s },
     searchInput: { flex: 1, fontSize: 14, fontWeight: '500' },
     customerListContent: { paddingBottom: spacing['3xl'] },
+    deviceOptionList: { gap: spacing.s, paddingBottom: spacing['3xl'] },
+    deviceOption: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: spacing.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
+    deviceOptionText: { flex: 1, fontSize: 14, fontWeight: '700' },
     emptyListContent: { flexGrow: 1, justifyContent: 'center', paddingBottom: spacing['3xl'] },
     customerOption: { borderWidth: 1, borderRadius: 16, padding: spacing.m, marginBottom: spacing.s },
     customerOptionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.s },

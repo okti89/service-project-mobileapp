@@ -79,6 +79,11 @@ const CustomerCard = ({ customer, onPress, onEdit, navigation }) => {
         });
     };
 
+    const handleCreateService = (e) => {
+        e.stopPropagation();
+        navigation.navigate('CreateService', { prefilledCustomer: customer });
+    };
+
     return (
         <Pressable
             onPress={() => onPress(customer)}
@@ -148,6 +153,10 @@ const CustomerCard = ({ customer, onPress, onEdit, navigation }) => {
                 <Pressable onPress={handleServices} style={({ pressed }) => [styles.bottomActionBtn, { borderColor: serviceOrange, backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.05)', opacity: pressed ? 0.7 : 1 }]}>
                     <MaterialCommunityIcons name="clipboard-list-outline" size={14} color={serviceOrange} />
                     <Text style={[styles.bottomActionText, { color: serviceOrange }]}>Servisler</Text>
+                </Pressable>
+                <Pressable onPress={handleCreateService} style={({ pressed }) => [styles.createServiceActionBtn, { borderColor: serviceBlue, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.08)' : 'rgba(37, 99, 235, 0.05)', opacity: pressed ? 0.7 : 1 }]}>
+                    <MaterialCommunityIcons name="clipboard-plus-outline" size={14} color={serviceBlue} />
+                    <Text style={[styles.bottomActionText, { color: serviceBlue }]}>Servis Ekle</Text>
                 </Pressable>
             </View>
         </Pressable>
@@ -409,6 +418,16 @@ const styles = StyleSheet.create({
         fontSize: 11.5,
         fontWeight: '700',
         marginLeft: 4,
+    },
+    createServiceActionBtn: {
+        width: '100%',
+        height: 34,
+        borderRadius: 8,
+        borderWidth: 1.2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
     },
     noteRow: {
         flexDirection: 'row',

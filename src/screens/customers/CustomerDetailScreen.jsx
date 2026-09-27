@@ -88,6 +88,10 @@ export default function CustomerDetailScreen({ navigation, route }) {
         navigation.navigate('AdminCustomerForm', { customer });
     };
 
+    const handleCreateService = () => {
+        navigation.navigate('CreateService', { prefilledCustomer: customer });
+    };
+
     const handleLocation = () => {
         if (!customer?.address) {
             Alert.alert('Hata', 'Müşteri adresi bulunamadı');
@@ -331,6 +335,11 @@ export default function CustomerDetailScreen({ navigation, route }) {
                         <Text style={[styles.actionBtnText, { color: colors.text }]}>Düzenle</Text>
                     </Pressable>
                 </View>
+
+                <Pressable onPress={handleCreateService} style={[styles.createServiceButton, { backgroundColor: serviceBlue }]}>
+                    <MaterialCommunityIcons name="clipboard-plus-outline" size={19} color="#FFFFFF" />
+                    <Text style={styles.createServiceButtonText}>Bu müşteri için servis oluştur</Text>
+                </Pressable>
 
                 {/* Active Services List */}
                 <View style={styles.sectionHeader}>
@@ -628,6 +637,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 6,
         marginBottom: 20,
+    },
+    createServiceButton: {
+        height: 46,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+    },
+    createServiceButtonText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '800',
     },
     actionBtn: {
         flex: 1,

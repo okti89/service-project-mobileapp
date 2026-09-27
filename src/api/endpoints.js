@@ -98,6 +98,10 @@ const ENDPOINTS = {
     },
     REPORTS: {
         DASHBOARD: 'reports/dashboard/',
+        DAILY_SUMMARY: 'reports/daily-summary/',
+        DAILY_SUMMARY_PDF: 'reports/daily-summary/pdf/',
+        DAILY_SERVICE_LIST: 'reports/daily-service-list/',
+        DAILY_SERVICE_LIST_PDF: 'reports/daily-service-list/pdf/',
         GENERAL: 'reports/general/',
         TECHNICIAN: 'reports/technician/',
         MY_PERFORMANCE: 'reports/my-performance/',

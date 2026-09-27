@@ -33,6 +33,7 @@ import { fs as fontScale, sp } from '@/theme/scale';
 import { spacing } from '@/theme/spacing';
 import Header from '@/components/Header';
 import RouteMapModal from '@/components/common/RouteMapModal';
+import CompletedServicesToggle from '@/components/services/CompletedServicesToggle';
 import serviceService from '@/services/serviceService';
 import { getServiceStatusLabel } from '@/utils/serviceStatus';
 
@@ -162,13 +163,15 @@ export default function ServicesScreen({ navigation, route }) {
     const { config } = useConfig();
     const { showToast } = useToast();
     const customerId = route?.params?.customerId || null;
+    const overdueOnly = route?.params?.filter === 'overdue';
     const canCreateService = isAdmin || Boolean(mobilePermissions?.can_manage_services);
 
     const calendarPickerRef = useRef(null);
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [activeTab, setActiveTab] = useState(customerId ? 'all' : 'my');
+    const [activeTab, setActiveTab] = useState(customerId || overdueOnly ? 'all' : 'my');
     const [viewMode, setViewMode] = useState('day');
     const [services, setServices] = useState([]);
+    const [showCompletedServices, setShowCompletedServices] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedService, setSelectedService] = useState(null);
@@ -176,16 +179,22 @@ export default function ServicesScreen({ navigation, route }) {
     const [actionService, setActionService] = useState(null);
     const [actionsVisible, setActionsVisible] = useState(false);
     const [routeService, setRouteService] = useState(null);
+    const completedCount = services.filter((service) => service.service_status === 'completed').length;
+    const visibleServices = showCompletedServices && !overdueOnly
+        ? services
+        : services.filter((service) => service.service_status !== 'completed');
 
     const fetchServices = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);
         try {
             const startStr = dayjs(selectedDate).startOf(viewMode).format('YYYY-MM-DD');
             const endStr = dayjs(selectedDate).endOf(viewMode).format('YYYY-MM-DD');
-            const endpoint = (isAdmin && activeTab === 'all')
+            const endpoint = (isAdmin && (activeTab === 'all' || overdueOnly))
                 ? ENDPOINTS.SERVICES.ADMIN_LIST
                 : ENDPOINTS.SERVICES.TECHNICIAN_LIST;
-            const params = customerId
+            const params = overdueOnly
+                ? { overdue: true }
+                : customerId
                 ? { customer: customerId }
                 : { start_date: startStr, end_date: endStr };
             const res = await api.get(endpoint, { params });
@@ -196,7 +205,7 @@ export default function ServicesScreen({ navigation, route }) {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedDate, activeTab, viewMode, isAdmin, customerId]);
+    }, [selectedDate, activeTab, viewMode, isAdmin, customerId, overdueOnly]);
 
     useFocusEffect(useCallback(() => {
         fetchServices();
@@ -322,7 +331,7 @@ export default function ServicesScreen({ navigation, route }) {
                     showBack
                 />
 
-                {isAdmin ? (
+                {isAdmin && !overdueOnly ? (
                     <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border }}>
                         <Pressable
                             onPress={() => setActiveTab('my')}
@@ -343,6 +352,17 @@ export default function ServicesScreen({ navigation, route }) {
                     </View>
                 ) : null}
 
+                {overdueOnly ? (
+                    <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.m }}>
+                        <View style={[styles.overdueBanner, { backgroundColor: isDark ? 'rgba(245,158,11,0.10)' : '#FFFBEB', borderColor: '#F59E0B55' }]}>
+                            <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#D97706" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.overdueBannerTitle, { color: colors.text }]}>Geciken Servisler</Text>
+                                <Text style={[styles.overdueBannerText, { color: colors.textSecondary }]}>Randevu zamanı geçmiş ve henüz tamamlanmamış servisler</Text>
+                            </View>
+                        </View>
+                    </View>
+                ) : (
                 <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.m, gap: spacing.m }}>
                     <View style={{ flexDirection: 'row', backgroundColor: isDark ? colors.surface : '#F1F5F9', borderRadius: sp(10), padding: sp(4) }}>
                         {[
@@ -381,6 +401,17 @@ export default function ServicesScreen({ navigation, route }) {
                         </Pressable>
                     </View>
                 </View>
+                )}
+
+                {!overdueOnly && (
+                    <View style={styles.completedToggleRow}>
+                        <CompletedServicesToggle
+                            visible={showCompletedServices}
+                            count={completedCount}
+                            onChange={setShowCompletedServices}
+                        />
+                    </View>
+                )}
 
                 {loading ? (
                     <View style={styles.loadingContainer}>
@@ -388,7 +419,7 @@ export default function ServicesScreen({ navigation, route }) {
                     </View>
                 ) : (
                     <FlatList
-                        data={services}
+                        data={visibleServices}
                         keyExtractor={(item) => String(item.id)}
                         renderItem={({ item }) => (
                                 <ServiceCard
@@ -404,7 +435,13 @@ export default function ServicesScreen({ navigation, route }) {
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <MaterialCommunityIcons name="clipboard-text-outline" size={48} color={colors.textTertiary} />
-                                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>{'Seçilen tarihlerde servis kaydı bulunmuyor.'}</Text>
+                                <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+                                    {overdueOnly
+                                        ? 'Geciken servis bulunmuyor.'
+                                        : completedCount > 0 && !showCompletedServices
+                                            ? 'Bu dönemdeki tamamlanan servisler gizli. Görmek için yukarıdaki seçeneği açın.'
+                                            : 'Seçilen tarihlerde servis kaydı bulunmuyor.'}
+                                </Text>
                             </View>
                         }
                     />
@@ -553,6 +590,30 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    overdueBanner: {
+        minHeight: sp(64),
+        borderWidth: 1,
+        borderRadius: sp(10),
+        paddingHorizontal: sp(14),
+        paddingVertical: sp(11),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: sp(10),
+    },
+    overdueBannerTitle: {
+        fontSize: fontScale(14),
+        fontWeight: '800',
+    },
+    overdueBannerText: {
+        marginTop: sp(2),
+        fontSize: fontScale(11),
+        lineHeight: fontScale(16),
+    },
+    completedToggleRow: {
+        paddingHorizontal: spacing.gutter,
+        paddingTop: sp(6),
+        paddingBottom: sp(8),
     },
     dateSelectorRow: {
         flexDirection: 'row',

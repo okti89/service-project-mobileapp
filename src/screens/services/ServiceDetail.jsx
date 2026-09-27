@@ -1342,6 +1342,19 @@ const GenelTab = ({ service, items, photos, colors, isDark, onCall, onMap, onOpe
                     <Text style={[styles.faultText, { color: colors.text }]}>{service.fault_description}</Text>
                 </Card>
             ) : null}
+            {service.description ? (
+                <Card title="Servis Açıklaması" icon="text-box-outline" colors={colors} isDark={isDark}>
+                    <Text style={[styles.faultText, { color: colors.text }]}>{service.description}</Text>
+                </Card>
+            ) : null}
+
+            {(service.historical_warranty || service.historical_technician_notes || service.historical_custom_note) ? (
+                <Card title="Eski Servis Bilgileri" icon="archive-outline" colors={colors} isDark={isDark}>
+                    {service.historical_warranty ? <InfoRow label="Garanti Süresi" value={service.historical_warranty} colors={colors} multiline /> : null}
+                    {service.historical_technician_notes ? <InfoRow label="Teknisyen Notu" value={service.historical_technician_notes} colors={colors} multiline /> : null}
+                    {service.historical_custom_note ? <InfoRow label="Özel Not" value={service.historical_custom_note} colors={colors} multiline /> : null}
+                </Card>
+            ) : null}
 
             {/* Özet İstatistikler */}
             <View style={styles.statsRow}>

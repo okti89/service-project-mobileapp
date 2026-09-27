@@ -23,6 +23,16 @@
         "buildType": "apk"
       }
     },
+    "erkmen-apk": {
+      "channel": "erkmen-production",
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "erkmen"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "channel": "production",
       "autoIncrement": true

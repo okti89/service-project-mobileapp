@@ -24,6 +24,8 @@ import AdminAccountingScreen from "@/screens/admin/AdminAccountingScreen";
 import AdminAccountingFormScreen from "@/screens/admin/AdminAccountingFormScreen";
 import AdminAccountFormScreen from "@/screens/admin/AdminAccountFormScreen";
 import AdminReportsScreen from "@/screens/admin/AdminReportsScreen";
+import DailySummaryScreen from "@/screens/admin/DailySummaryScreen";
+import DailyServiceListScreen from "@/screens/admin/DailyServiceListScreen";
 import AdminCompanySettingsScreen from "@/screens/admin/AdminCompanySettingsScreen";
 import AdminNotificationsScreen from "@/screens/admin/AdminNotificationsScreen";
 import QuoteListScreen from "@/screens/quotes/QuoteListScreen";
@@ -59,6 +61,8 @@ export default function AdminPanelNavigator() {
             <Stack.Screen name="AdminAccountingForm" component={AdminAccountingFormScreen} />
             <Stack.Screen name="AdminAccountForm" component={AdminAccountFormScreen} />
             <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+            <Stack.Screen name="AdminDailySummary" component={DailySummaryScreen} />
+            <Stack.Screen name="AdminDailyServiceList" component={DailyServiceListScreen} />
             <Stack.Screen name="AdminServices" component={ServicesScreen} />
             <Stack.Screen name="AdminQuotes" component={QuoteListScreen} />
             <Stack.Screen name="AdminQuoteForm" component={QuoteFormScreen} />

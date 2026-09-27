@@ -22,6 +22,7 @@ import { useNotifications } from '@/context/NotificationContext';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { serviceBlue, serviceGreen, serviceOrange, serviceRed } from '@/theme/color';
+import { openNotificationTarget } from '@/navigation/notificationTargets';
 
 const PAGE_SIZE = 50;
 
@@ -102,11 +103,12 @@ const getNotificationMeta = (item) => {
         || blob.includes('uyarı')
         || relatedScreen.includes('service')
     ) {
+        const opensServiceList = relatedScreen.replace(/[\s_-]/g, '').includes('overdueservices');
         return {
             category: 'service',
-            icon: blob.includes('gecikme') ? 'clock-outline' : 'wrench-outline',
-            color: blob.includes('gecikme') ? serviceOrange : serviceBlue,
-            actionLabel: item?.related_id ? 'Servisi Aç' : null,
+            icon: blob.includes('gecik') ? 'clock-outline' : 'wrench-outline',
+            color: blob.includes('gecik') ? serviceOrange : serviceBlue,
+            actionLabel: opensServiceList ? 'Listeyi Aç' : item?.related_id ? 'Servisi Aç' : null,
         };
     }
 
@@ -130,25 +132,6 @@ const formatGroupLabel = (dateValue) => {
     if (date.isSame(dayjs(), 'day')) return 'Bugün';
     if (date.isSame(dayjs().subtract(1, 'day'), 'day')) return 'Dün';
     return date.format('DD MMMM');
-};
-
-const openRelatedScreen = (navigation, item) => {
-    const screen = String(item?.related_screen || '').replace(/[\s_-]/g, '').toLocaleLowerCase('tr-TR');
-    const relatedId = item?.related_id;
-    const routes = {
-        servicedetail: ['ServiceDetail', relatedId ? { serviceId: relatedId } : undefined],
-        service: ['ServiceDetail', relatedId ? { serviceId: relatedId } : undefined],
-        payroll: ['TechnicianPayrollDetail', relatedId ? { payrollId: relatedId } : undefined],
-        payrolldetail: ['TechnicianPayrollDetail', relatedId ? { payrollId: relatedId } : undefined],
-        myshifts: ['ProfileMyShifts'],
-        profilemyshifts: ['ProfileMyShifts'],
-        userdetail: ['AdminUsers'],
-        dailyservicesummary: ['ServiceList'],
-    };
-    const target = routes[screen];
-    if (!target || (['servicedetail', 'service', 'payroll', 'payrolldetail'].includes(screen) && !relatedId)) return false;
-    navigation.navigate(...target);
-    return true;
 };
 
 function SectionHeader({ label, colors }) {
@@ -332,12 +315,12 @@ export default function NotificationsScreen() {
     }, [updateUnreadCount]);
 
     const handlePress = useCallback((item) => {
-        openRelatedScreen(navigation, item);
+        openNotificationTarget(navigation, item);
         markAsRead(item);
     }, [markAsRead, navigation]);
 
     const handleActionPress = useCallback((item) => {
-        openRelatedScreen(navigation, item);
+        openNotificationTarget(navigation, item);
         markAsRead(item);
     }, [markAsRead, navigation]);
 

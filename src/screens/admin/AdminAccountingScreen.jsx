@@ -614,8 +614,8 @@ export default function AdminAccountingScreen({ navigation }) {
                                     onPress={() => navigation.navigate('AdminAccountingForm', { onSuccess: fetchData })}
                                     style={[styles.tabBtn, styles.newTransactionTab, { borderColor: serviceBlue }]}
                                 >
-                                    <Icon name="add-circle-outline" size={15} color={serviceBlue} />
-                                    <Text style={[styles.tabBtnText, { color: serviceBlue }]}>Yeni Finansal İşlem</Text>
+                                    <MaterialCommunityIcons name="plus-circle-outline" size={15} color={serviceBlue} />
+                                    <Text style={[styles.tabBtnText, { color: serviceBlue }]}>Yeni İşlem</Text>
                                 </Pressable>
                                 <Pressable
                                     onPress={() => setActiveTab('income')}

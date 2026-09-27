@@ -504,6 +504,10 @@ export default function ServiceOperationSheet({
                         <BottomSheetTextInput
                             value={name}
                             onChangeText={setName}
+                            autoCorrect={false}
+                            spellCheck={false}
+                            autoComplete="off"
+                            importantForAutofill="no"
                             placeholder="Örn. Fan motoru değişimi"
                             placeholderTextColor={colors.textTertiary}
                             style={[styles.singleInput, { color: colors.text }]}
@@ -519,6 +523,10 @@ export default function ServiceOperationSheet({
                         <BottomSheetTextInput
                             value={description}
                             onChangeText={setDescription}
+                            autoCorrect={false}
+                            spellCheck={false}
+                            autoComplete="off"
+                            importantForAutofill="no"
                             placeholder="Yapılan işlem detayları"
                             placeholderTextColor={colors.textTertiary}
                             style={[styles.singleInput, { color: colors.text }]}

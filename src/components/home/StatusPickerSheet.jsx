@@ -42,7 +42,7 @@ const StatusPickerSheet = forwardRef(({
         return () => subscription.remove();
     }, []);
 
-    const snapPoints = useMemo(() => ['70%'], []);
+    const snapPoints = useMemo(() => ['88%'], []);
     const sheetBg = isDark ? colors.surface : '#F8FAFC';
     const rowBg = isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF';
     const rowBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)';
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     container: {
         paddingHorizontal: spacing.gutter,
         paddingTop: spacing.s,
-        paddingBottom: sp(40),
+        paddingBottom: sp(72),
     },
     handle: {
         alignSelf: 'center',

@@ -140,6 +140,22 @@ const ADMIN_MENU_ITEMS = [
         color: '#8B5CF6',
     },
     {
+        key: 'daily-summary',
+        icon: 'file-chart-outline',
+        label: 'Günlük İcmal',
+        description: 'Günlük servis, tahsilat ve bakiye özeti',
+        route: 'AdminDailySummary',
+        color: serviceBlue,
+    },
+    {
+        key: 'daily-service-lists',
+        icon: 'clipboard-text-clock-outline',
+        label: 'Günlük Servis Listeleri',
+        description: 'Genel liste ve teknisyene WhatsApp PDF gönderimi',
+        route: 'AdminDailyServiceList',
+        color: serviceBlue,
+    },
+    {
         key: 'company-settings',
         icon: 'cog-outline',
         label: 'Firma Ayarları',
@@ -158,13 +174,13 @@ const PERMISSION_ITEM_MAP = {
     can_manage_accounting: ['finance-accounting'],
     can_manage_services: ['services', 'quotes'],
     can_manage_notifications: ['notifications'],
-    can_manage_reports: ['reports'],
+    can_manage_reports: ['reports', 'daily-summary', 'daily-service-lists'],
     can_manage_settings: ['company-settings'],
 };
 
 const MENU_CATEGORIES = [
     { key: 'users', label: 'Kullanıcı ve Ekip Yönetimi', items: ['users-list', 'users-pending', 'technicians-list'] },
-    { key: 'field', label: 'Saha ve Operasyon', items: ['services', 'quotes', 'technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
+    { key: 'field', label: 'Saha ve Operasyon', items: ['services', 'daily-service-lists', 'daily-summary', 'quotes', 'technicians-locations', 'technicians-shifts', 'technicians-leaves'] },
     { key: 'finance', label: 'Finans ve Muhasebe', items: ['finance-payroll', 'finance-accounting'] },
     { key: 'customer_inventory', label: 'Müşteri ve Envanter', items: ['customers-list', 'inventory'] },
     { key: 'system', label: 'Sistem Yönetimi', items: ['notifications', 'reports', 'company-settings'] }

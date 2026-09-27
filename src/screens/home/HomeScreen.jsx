@@ -37,6 +37,7 @@ import HomeHeader from "@/components/home/HomeHeader";
 import CalendarPickerSheet from "@/components/home/CalendarPickerSheet";
 import AppBottomSheet from "@/components/AppBottomSheet";
 import RouteMapModal from "@/components/common/RouteMapModal";
+import CompletedServicesToggle from "@/components/services/CompletedServicesToggle";
 
 import { fs, sp, lh } from "@/theme/scale";
 import { spacing } from "@/theme/spacing";
@@ -56,6 +57,7 @@ export default function HomeScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('my'); // 'my' or 'all'
     const [servicesLoading, setServicesLoading] = useState(false);
     const [services, setServices] = useState([]);
+    const [showCompletedServices, setShowCompletedServices] = useState(false);
     const [shifts, setShifts] = useState([]);
     const [weeklyServiceSummary, setWeeklyServiceSummary] = useState(null);
     const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(false);
@@ -196,15 +198,32 @@ export default function HomeScreen({ navigation }) {
 
         try {
             setShiftActionLoading(true);
-            await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
+            const shiftResponse = await api.post(ENDPOINTS.TECHNICIAN.SHIFT_START);
+            const startedShift = shiftResponse?.data;
+            if (startedShift?.id && startedShift?.start_time && !startedShift?.end_time) {
+                setShifts((current) => [
+                    startedShift,
+                    ...current.filter((shift) => String(shift?.id) !== String(startedShift.id)),
+                ]);
+                setNow(dayjs());
+            }
             if (enableLocationTracking) {
                 void syncLocationTrackingByShift();
             } else {
                 await syncLocationTrackingByShift({ forceStop: true });
             }
             showToast('success', 'Mesai Başladı', 'Mesainiz başarıyla başlatıldı.');
-            fetchData();
+            void fetchData();
         } catch (err) {
+            const blockingShift = err?.response?.data?.shift;
+            if (err?.response?.status === 409 && blockingShift?.id) {
+                setShifts((current) => [
+                    blockingShift,
+                    ...current.filter((shift) => String(shift?.id) !== String(blockingShift.id)),
+                ]);
+                setShiftWarningVisible(true);
+                return;
+            }
             showToast('error', 'Hata', err?.response?.data?.detail || 'Mesai başlatılamadı.');
         } finally {
             setShiftActionLoading(false);
@@ -408,8 +427,11 @@ export default function HomeScreen({ navigation }) {
     };
 
     // Computed Stats
-    const todayCount = services.length;
     const completedCount = services.filter(s => s.service_status === 'completed').length;
+    const visibleServices = showCompletedServices
+        ? services
+        : services.filter(s => s.service_status !== 'completed');
+    const todayCount = visibleServices.length;
     const ongoingCount = services.filter(s => s.service_status === 'in_progress').length;
     const plannedCount = services.filter(s => s.service_status === 'new' || s.service_status === 'assigned').length;
 
@@ -558,7 +580,7 @@ export default function HomeScreen({ navigation }) {
                                     <View style={styles.shiftInfoItem}>
                                         <MaterialCommunityIcons name="briefcase-clock-outline" size={sp(16)} color={colors.textTertiary} />
                                         <View style={styles.shiftInfoCopy}>
-                                            <Text style={[styles.shiftInfoLabel, { color: colors.textTertiary }]}>Şirket saatleri</Text>
+                                            <Text style={[styles.shiftInfoLabel, { color: colors.textTertiary }]}>Mesai Saatleri</Text>
                                             <Text style={[styles.shiftInfoValue, { color: colors.text }]} numberOfLines={1}>{shiftState.todayScheduleLabel || 'Tanımlı değil'}</Text>
                                         </View>
                                     </View>
@@ -716,20 +738,30 @@ export default function HomeScreen({ navigation }) {
                         </View>
                     )}
 
+                    <View style={styles.completedToggleRow}>
+                        <CompletedServicesToggle
+                            visible={showCompletedServices}
+                            count={completedCount}
+                            onChange={setShowCompletedServices}
+                        />
+                    </View>
+
                     {servicesLoading ? (
                         <View style={styles.inlineLoading}>
                             <ActivityIndicator size="small" color="#0066CC" />
                             <Text style={[styles.inlineLoadingText, { color: colors.textSecondary }]}>Yükleniyor...</Text>
                         </View>
-                    ) : services.length === 0 ? (
+                    ) : visibleServices.length === 0 ? (
                         <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                             <MaterialCommunityIcons name="clipboard-text-outline" size={42} color={colors.textTertiary} />
                             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-                                Seçilen tarihte servis kaydı bulunmuyor.
+                                {completedCount > 0 && !showCompletedServices
+                                    ? 'Bu tarihteki tamamlanan servisler gizli. Görmek için yukarıdaki seçeneği açın.'
+                                    : 'Seçilen tarihte servis kaydı bulunmuyor.'}
                             </Text>
                         </View>
                     ) : (
-                        services.map((item, index) => {
+                        visibleServices.map((item, index) => {
                             const badge = getStatusBadge(item.service_status, index + 1);
                             const serviceTime = item.scheduled_date ? dayjs(item.scheduled_date).format('HH:mm') : '--:--';
                             const deviceDesc = [item.device_type_name, item.device_brand_name, item.device_model_name].filter(Boolean).join(' > ');
@@ -1560,6 +1592,9 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: fs(17),
         fontWeight: '700',
+    },
+    completedToggleRow: {
+        marginBottom: sp(8),
     },
     sectionLink: {
         fontSize: fs(14),

@@ -11,6 +11,7 @@ import ENDPOINTS from '@/api/endpoints';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { navigationRef } from '@/navigation/navigationRef';
+import { openNotificationTarget } from '@/navigation/notificationTargets';
 
 const NotificationContext = createContext();
 const DEVICE_ID_KEY = 'device_id';
@@ -73,6 +74,8 @@ export const NotificationProvider = ({ children }) => {
     const [notification, setNotification] = useState(false);
     const notificationListener = useRef();
     const responseListener = useRef();
+    const handledResponseId = useRef(null);
+    const pendingResponseId = useRef(null);
 
     const fetchUnreadCount = useCallback(async () => {
         const count = await refreshUnreadNotificationCount({
@@ -125,30 +128,56 @@ export const NotificationProvider = ({ children }) => {
             fetchUnreadCount();
         });
 
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        let navigationTimer;
+        let isActive = true;
+
+        const handleNotificationResponse = (response) => {
+            if (!response || !userToken) return;
+
+            const responseId = response.notification?.request?.identifier;
+            if (responseId && (
+                handledResponseId.current === responseId
+                || pendingResponseId.current === responseId
+            )) return;
+            pendingResponseId.current = responseId || null;
+
             const data = response.notification.request.content.data;
             console.log('Notification interaction data:', data);
 
-            if (data?.screen) {
-                // Navigate to specific screen if provided in data
-                const params = data.params || {};
-                if (data.related_id) {
-                    params.id = data.related_id;
+            const navigateToTarget = (attempt = 0) => {
+                if (!isActive || !userToken) return;
+                if (navigationRef.isReady()) {
+                    openNotificationTarget(navigationRef, data, { fromRoot: true });
+                    handledResponseId.current = responseId || null;
+                    pendingResponseId.current = null;
+                    try {
+                        Notifications.clearLastNotificationResponse();
+                    } catch (error) {
+                        console.log('Notification response clear error:', error);
+                    }
+                    return;
                 }
 
-                if (navigationRef.isReady()) {
-                    navigationRef.navigate(data.screen, params);
+                if (attempt < 20) {
+                    navigationTimer = setTimeout(() => navigateToTarget(attempt + 1), 250);
                 } else {
-                    // If navigation not ready, wait a bit
-                    setTimeout(() => {
-                        navigationRef.navigate(data.screen, params);
-                    }, 1000);
+                    pendingResponseId.current = null;
                 }
-            }
+            };
+
+            navigateToTarget();
             fetchUnreadCount();
-        });
+        };
+
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+        Notifications.getLastNotificationResponseAsync()
+            .then(handleNotificationResponse)
+            .catch((error) => console.log('Last notification response error:', error));
 
         return () => {
+            isActive = false;
+            pendingResponseId.current = null;
+            if (navigationTimer) clearTimeout(navigationTimer);
             notificationListener.current?.remove();
             responseListener.current?.remove();
         };

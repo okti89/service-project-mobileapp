@@ -144,7 +144,6 @@ export default function AdminReportsScreen({ navigation }) {
     const handleExportPdf = async (type) => {
         if (exportingPdf) return;
         setExportingPdf(true);
-        
         const endpoint = type === 'general' ? '/reports/general/' : '/reports/technician/';
         const monthQuery = selectedMonth ? `&month=${selectedMonth}` : '';
         const pdfUrl = `${api.defaults.baseURL}${endpoint}?year=${selectedYear}${monthQuery}&export=pdf`;
@@ -361,7 +360,6 @@ export default function AdminReportsScreen({ navigation }) {
                             )}
                         </Pressable>
                     </View>
-
                     {/* Net Kâr Kartı (Webdeki Lüks Mor Kart) */}
                     {generalData && (
                         <View style={[styles.profitCard, { backgroundColor: isDark ? '#312E81' : '#5A67D8' }]}>
@@ -946,7 +944,6 @@ const styles = StyleSheet.create({
 
     applyBtn: { width: '100%', height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
     applyBtnText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-
     // Detay Kartı
     detailCard: { width: '100%', gap: 10 },
     detailCardTitle: { fontSize: 16, fontWeight: '800' },
